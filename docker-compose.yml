@@ -1,0 +1,28 @@
+version: "3"
+
+services:
+  biotechnica:
+    build: .
+    ports: 
+      - "2076:2076"
+    volumes:
+      - .:/app
+    devices:
+      - "/dev/video2:/dev/video2"
+    privileged: true
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "2076", "--reload"]
+
+  kiroshi:
+    image: node:18
+    working_dir: /app
+    ports:
+      - "2077:2077"
+    volumes:
+      - ./pe_medicinerecognision:/app
+      - /app/node_modules
+    environment:
+       - NODE_ENV=development
+       - CHOKIDAR_USEPOLLING=true
+    command: ["sh", "-c", "npm install && npm run dev"]
+    depends_on:
+      - biotechnica
