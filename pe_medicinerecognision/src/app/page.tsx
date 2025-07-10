@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Button from '@mui/material/Button';
 
 const CameraApp: React.FC = () => {
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -16,7 +17,6 @@ const CameraApp: React.FC = () => {
 
   const captureImage = async () => {
     if (!isMounted) return;
-    
     setIsLoading(true);
     setError(null);
     
@@ -44,30 +44,77 @@ const CameraApp: React.FC = () => {
   };
 
   return (
-    <div className="camera-container">
-      <h1>Camera Capture</h1>
+    <div className="camera-container" style={{ padding: '20px' }}>
+      <h1>Medicine Recognision</h1>
+      <br></br>
       
-      <button 
+      <Button 
+        variant="contained"
         onClick={captureImage} 
         disabled={isLoading}
         className="capture-button"
       >
         {isLoading ? 'Capturing...' : 'Capture Image'}
-      </button>
+      </Button>
       
       {error && <div className="error-message">{error}</div>}
       
-      {imageUrl && isMounted && (
-        <div className="image-preview">
-          <img 
-            src={imageUrl} 
-            alt="Captured" 
-            onError={() => isMounted && setError('Failed to load image')}
-            key={imageUrl} // Force re-render when URL changes
-          />
-          {captureTime && <p>Captured at: {captureTime}</p>}
+      <div style={{ 
+        display: 'flex', 
+        gap: '20px', 
+        marginTop: '20px',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ 
+          flex: 1,
+          minWidth: '300px',
+          border: '1px solid #ddd',
+          padding: '10px',
+          borderRadius: '8px'
+        }}>
+          <h2>Captured Image</h2>
+          {imageUrl && isMounted ? (
+            <div className="image-preview">
+              <img 
+                src={imageUrl} 
+                alt="Captured" 
+                onError={() => isMounted && setError('Failed to load image')}
+                key={imageUrl}
+                style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
+              />
+              {captureTime && <p>Captured at: {captureTime}</p>}
+            </div>
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              height: '480px',
+              backgroundColor: '#f5f5f5',
+              color: '#666'
+            }}>
+              No image captured yet
+            </div>
+          )}
         </div>
-      )}
+        
+        <div style={{ 
+          flex: 1,
+          minWidth: '300px',
+          border: '1px solid #ddd',
+          padding: '10px',
+          borderRadius: '8px'
+        }}>
+          <h2>Live Video Feed</h2>
+          {isMounted && (
+            <img
+              src="http://localhost:2076/video_feed"
+              alt="Live Camera Feed"
+              style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 };
