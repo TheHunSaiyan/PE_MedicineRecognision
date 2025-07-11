@@ -1,0 +1,16 @@
+{
+    "brightness": 60,
+    "contrast": 32,
+    "saturation": 60,
+    "hue": 0,
+    "white_balance_automatic": false,
+    "gamma": 100,
+    "gain": 0,
+    "power_line_frequency": 1,
+    "white_balance_temperature": 4600,
+    "sharpness": 2,
+    "backlight_compensation": 1,
+    "auto_exposure": 1,
+    "exposure_time_absolute": 157,
+    "exposure_dynamic_framerate": false
+}

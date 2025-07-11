@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
+import Link from 'next/link';
 
 const CameraApp: React.FC = () => {
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -115,6 +116,12 @@ const CameraApp: React.FC = () => {
           )}
         </div>
       </div>
+      <br></br>
+      <Link href="/calibrate" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' }}>
+          Calibrate Camera
+        </Button>
+      </Link>
     </div>
   );
 };
