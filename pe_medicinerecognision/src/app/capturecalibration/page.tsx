@@ -3,31 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
-import Select from 'react-select'
 
 const CameraApp: React.FC = () => {
-const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageUrl, setImageUrl] = useState<string>('');
   const [captureTime, setCaptureTime] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isLiveFeedActive, setIsLiveFeedActive] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-
-  interface SelectOption {
-  value: string;
-  label: string;
-}
-
-const options: SelectOption[] = [
-  { value: 'MaxDocs', label: 'MaxDocs' },
-  { value: 'BounceBack', label: 'Bounce Back' },
-  { value: 'Neuroblockers', label: 'Neuroblockers' }
-];
-
-  const handleSelect = (option: { value: string }) => {
-    setSelectedOption(option.value);
-  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -67,26 +50,8 @@ const options: SelectOption[] = [
   };
 
   return (
-    <div className="camera-container" style={{ padding: '20px', height: '100vh' }}>
-     <Select<SelectOption>
-  options={options}
-  onChange={(selected) => {
-    setSelectedOption(selected?.value ?? null);
-  }}
-  value={options.find(option => option.value === selectedOption)}
-  placeholder="Select an option"
-  styles={{
-    control: (base) => ({
-      ...base,
-      marginBottom: '20px'
-    }),
-    option: (base) => ({
-      ...base,
-      color: 'black'
-    }),
-  }}
-  isClearable
-/>
+    <div className="camera-container" style={{ padding: '20px', height: '100vh'}}>
+      <br></br>
       <Button 
           variant="contained"
           onClick={captureImage} 

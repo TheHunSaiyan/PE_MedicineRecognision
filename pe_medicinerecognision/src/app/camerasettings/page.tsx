@@ -243,19 +243,6 @@ if (!parameters) {
             marginBottom: '16px'
           }}>
             <div style={{ flex: '1 1 300px' }}>
-              <Typography id="auto-exposure-slider" gutterBottom>Auto Exposure</Typography>
-                    <Slider
-                      value={parameters.auto_exposure}
-                      onChange={handleSliderChange('auto_exposure')}
-                      aria-labelledby="auto-exposure-slider"
-                      min={0}
-                      max={3}
-                      step={1}
-                      marks
-                      valueLabelDisplay="auto"
-                    />
-            </div>
-            <div style={{ flex: '1 1 300px' }}>
               <Typography id="exposure-time-slider" gutterBottom>Exposure Time Absolute</Typography>
                     <Slider
                       value={parameters.exposure_time_absolute}

@@ -5,7 +5,5 @@
     "white_balance_automatic": false,
     "white_balance_temperature": 4500,
     "sharpness": 2,
-    "auto_exposure": 1,
-    "exposure_time_absolute": 800,
-    "exposure_dynamic_framerate": false
+    "exposure_time_absolute": 800
 }

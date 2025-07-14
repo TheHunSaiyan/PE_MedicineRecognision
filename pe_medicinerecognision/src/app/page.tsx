@@ -34,6 +34,23 @@ const CameraApp: React.FC = () => {
         </Button>
       </Link>
       <br></br>
+      <Link href="/capturecalibration" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Capture Calibration Images
+        </Button>
+      </Link>
+      <br></br>
       <Link href="/calibrationsettings" passHref>
         <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
     width: {
@@ -48,23 +65,6 @@ const CameraApp: React.FC = () => {
     boxShadow: 3
   }}>
           Calibration Settings
-        </Button>
-      </Link>
-      <br></br>
-      <Link href="/calibration" passHref>
-        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
-    width: {
-      xs: '100%',
-      sm: 'auto',
-    },
-    minWidth: 400,
-    height: 80,
-    padding: '0 32px',
-    fontSize: '20px',
-    borderRadius: '8px',
-    boxShadow: 3
-  }}>
-          Calibration
         </Button>
       </Link>
       <br></br>
