@@ -1,21 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Button, TextField, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container} from '@mui/material';
+import { Button, TextField, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider} from '@mui/material';
 import Link from 'next/link';
 
 interface CameraParameters {
   brightness: number;
   contrast: number;
   saturation: number;
-  hue: number;
   white_balance_automatic: boolean;
-  gamma: number;
-  gain: number;
-  power_line_frequency: number;
   white_balance_temperature: number;
   sharpness: number;
-  backlight_compensation: number;
   auto_exposure: number;
   exposure_time_absolute: number;
   exposure_dynamic_framerate: boolean;
@@ -25,14 +20,9 @@ const defaultParameters: CameraParameters = {
   brightness: 0,
   contrast: 32,
   saturation: 60,
-  hue: 0,
   white_balance_automatic: false,
-  gamma: 100,
-  gain: 0,
-  power_line_frequency: 1,
   white_balance_temperature: 4600,
   sharpness: 2,
-  backlight_compensation: 1,
   auto_exposure: 1,
   exposure_time_absolute: 157,
   exposure_dynamic_framerate: false,
@@ -68,7 +58,12 @@ const CameraSettingsForm: React.FC = () => {
       return () => setIsMounted(false);
     }, []);
 
-    
+     const handleSliderChange = (name: keyof CameraParameters) => (event: Event, newValue: number | number[]) => {
+    setParameters(prev => ({
+      ...prev,
+      [name]: newValue as number
+    }));
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -138,6 +133,7 @@ if (!parameters) {
   }
 
   return (
+    <div className="camera-container" style={{ padding: '20px' }}>
     <Container maxWidth="xl" sx={{ 
       py: 4,
       height: '100vh',
@@ -156,70 +152,50 @@ if (!parameters) {
           marginBottom: '20px'
         }}>
           <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Brightness"
-              name="brightness"
-              type="number"
-              value={parameters.brightness}
-              onChange={handleChange}
-              inputProps={{ min: -64, max: 64 }}
-            />
+            <Typography id="brightness-slider" gutterBottom>Brightness</Typography>
+                  <Slider
+                    value={parameters.brightness}
+                    onChange={handleSliderChange('brightness')}
+                    aria-labelledby="brightness-slider"
+                    min={-64}
+                    max={64}
+                    valueLabelDisplay="auto"
+                  />
           </div>
           <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Contrast"
-              name="contrast"
-              type="number"
-              value={parameters.contrast}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 64 }}
-            />
+             <Typography id="contrast-slider" gutterBottom>Contrast</Typography>
+                  <Slider
+                    value={parameters.contrast}
+                    onChange={handleSliderChange('contrast')}
+                    aria-labelledby="contrast-slider"
+                    min={0}
+                    max={64}
+                    valueLabelDisplay="auto"
+                  />
           </div>
           <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Saturation"
-              name="saturation"
-              type="number"
-              value={parameters.saturation}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 128 }}
-            />
+            <Typography id="saturation-slider" gutterBottom>Saturation</Typography>
+                  <Slider
+                    value={parameters.saturation}
+                    onChange={handleSliderChange('saturation')}
+                    aria-labelledby="saturation-slider"
+                    min={0}
+                    max={128}
+                    valueLabelDisplay="auto"
+                  />
           </div>
           <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Hue"
-              name="hue"
-              type="number"
-              value={parameters.hue}
-              onChange={handleChange}
-              inputProps={{ min: -40, max: 40 }}
-            />
-          </div>
-          <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Gamma"
-              name="gamma"
-              type="number"
-              value={parameters.gamma}
-              onChange={handleChange}
-              inputProps={{ min: 72, max: 500 }}
-            />
-          </div>
-          <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Sharpness"
-              name="sharpness"
-              type="number"
-              value={parameters.sharpness}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 6 }}
-            />
+             <Typography id="sharpness-slider" gutterBottom>Sharpness</Typography>
+                  <Slider
+                    value={parameters.sharpness}
+                    onChange={handleSliderChange('sharpness')}
+                    aria-labelledby="sharpness-slider"
+                    min={0}
+                    max={6}
+                    step={1}
+                    marks
+                    valueLabelDisplay="auto"
+                  />
           </div>
         </div>
 
@@ -243,16 +219,17 @@ if (!parameters) {
               label="Automatic White Balance"
             />
             <div style={{ flex: '1 1 300px' }}>
-              <TextField
-                fullWidth
-                label="White Balance Temperature"
-                name="white_balance_temperature"
-                type="number"
-                value={parameters.white_balance_temperature}
-                onChange={handleChange}
-                disabled={parameters.white_balance_automatic}
-                inputProps={{ min: 2800, max: 6500 }}
-              />
+              <Typography id="white-balance-slider" gutterBottom>White Balance Temperature</Typography>
+                    <Slider
+                      value={parameters.white_balance_temperature}
+                      onChange={handleSliderChange('white_balance_temperature')}
+                      aria-labelledby="white-balance-slider"
+                      min={2800}
+                      max={6500}
+                      step={100}
+                      valueLabelDisplay="auto"
+                      disabled={parameters.white_balance_automatic}
+                    />
             </div>
           </div>
         </div>
@@ -266,83 +243,32 @@ if (!parameters) {
             marginBottom: '16px'
           }}>
             <div style={{ flex: '1 1 300px' }}>
-              <TextField
-                fullWidth
-                label="Auto Exposure"
-                name="auto_exposure"
-                type="number"
-                value={parameters.auto_exposure}
-                onChange={handleChange}
-                inputProps={{ min: 0, max: 3 }}
-              />
+              <Typography id="auto-exposure-slider" gutterBottom>Auto Exposure</Typography>
+                    <Slider
+                      value={parameters.auto_exposure}
+                      onChange={handleSliderChange('auto_exposure')}
+                      aria-labelledby="auto-exposure-slider"
+                      min={0}
+                      max={3}
+                      step={1}
+                      marks
+                      valueLabelDisplay="auto"
+                    />
             </div>
             <div style={{ flex: '1 1 300px' }}>
-              <TextField
-                fullWidth
-                label="Exposure Time Absolute"
-                name="exposure_time_absolute"
-                type="number"
-                value={parameters.exposure_time_absolute}
-                onChange={handleChange}
-                inputProps={{ min: 1, max: 5000 }}
-              />
-            </div>
-            <div style={{ flex: '1 1 300px', display: 'flex', alignItems: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="exposure_dynamic_framerate"
-                    checked={parameters.exposure_dynamic_framerate}
-                    onChange={handleChange}
-                  />
-                }
-                label="Dynamic Framerate"
-              />
+              <Typography id="exposure-time-slider" gutterBottom>Exposure Time Absolute</Typography>
+                    <Slider
+                      value={parameters.exposure_time_absolute}
+                      onChange={handleSliderChange('exposure_time_absolute')}
+                      aria-labelledby="exposure-time-slider"
+                      min={1}
+                      max={5000}
+                      step={100}
+                      valueLabelDisplay="auto"
+                    />
             </div>
           </div>
         </div>
-
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px'
-        }}>
-          <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Gain"
-              name="gain"
-              type="number"
-              value={parameters.gain}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 100 }}
-            />
-          </div>
-          <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Backlight Compensation"
-              name="backlight_compensation"
-              type="number"
-              value={parameters.backlight_compensation}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 2 }}
-            />
-          </div>
-          <div style={{ flex: '1 1 300px' }}>
-            <TextField
-              fullWidth
-              label="Power Line Frequency"
-              name="power_line_frequency"
-              type="number"
-              value={parameters.power_line_frequency}
-              onChange={handleChange}
-              inputProps={{ min: 0, max: 2 }}
-            />
-          </div>
-        </div>
-
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
@@ -405,6 +331,7 @@ if (!parameters) {
         </Grid>
     </Grid>
     </Container>
+    </div>
   );
 };
 

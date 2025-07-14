@@ -5,123 +5,86 @@ import Button from '@mui/material/Button';
 import Link from 'next/link';
 
 const CameraApp: React.FC = () => {
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [captureTime, setCaptureTime] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
-  }, []);
-
-  const captureImage = async () => {
-    if (!isMounted) return;
-    setIsLoading(true);
-    setError(null);
-    
-     try {
-    const apiUrl = 'http://localhost:2076';
-    const response = await fetch(`${apiUrl}/capture`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.status === 'success' && data.filename) {
-      setImageUrl(`${apiUrl}/captured-images/${data.filename}`);
-      setCaptureTime(new Date().toLocaleTimeString());
-    } else {
-      throw new Error(data.error || 'Failed to capture image');
-    }
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'Unknown error occurred');
-  } finally {
-    setIsLoading(false);
-  }
-  };
 
   return (
-    <div className="camera-container" style={{ padding: '20px' }}>
-      <h1>Medicine Recognision</h1>
-      <br></br>
-      
-      <Button 
-        variant="contained"
-        onClick={captureImage} 
-        disabled={isLoading}
-        className="capture-button"
-      >
-        {isLoading ? 'Capturing...' : 'Capture Image'}
-      </Button>
-      
-      {error && <div className="error-message">{error}</div>}
-      
-      <div style={{ 
-        display: 'flex', 
-        gap: '20px', 
-        marginTop: '20px',
-        flexWrap: 'wrap'
-      }}>
-        <div style={{ 
-          flex: 1,
-          minWidth: '300px',
-          border: '1px solid #ddd',
-          padding: '10px',
-          borderRadius: '8px'
-        }}>
-          <h2>Captured Image</h2>
-          {imageUrl && isMounted ? (
-            <div className="image-preview">
-              <img 
-                src={imageUrl} 
-                alt="Captured" 
-                onError={() => isMounted && setError('Failed to load image')}
-                key={imageUrl}
-                style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
-              />
-              {captureTime && <p>Captured at: {captureTime}</p>}
-            </div>
-          ) : (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              height: '480px',
-              backgroundColor: '#f5f5f5',
-              color: '#666'
-            }}>
-              No image captured yet
-            </div>
-          )}
-        </div>
-        
-        <div style={{ 
-          flex: 1,
-          minWidth: '300px',
-          border: '1px solid #ddd',
-          padding: '10px',
-          borderRadius: '8px'
-        }}>
-          <h2>Live Video Feed</h2>
-          {isMounted && (
-            <img
-              src="http://localhost:2076/video_feed"
-              alt="Live Camera Feed"
-              style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
-            />
-          )}
-        </div>
+    <div className="camera-container" style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%, -50%)'
+    }}>
+    <div style={{ textAlign: 'center', marginBottom: '20px'}}>
+      <h1 style={{ fontSize:'40px' }}>Medicine Recognision</h1>
       </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <br></br>
-      <Link href="/calibrate" passHref>
-        <Button variant="contained" style={{ marginLeft: '10px' }}>
-          Calibrate Camera
+      <Link href="/camerasettings" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px', marginBottom:'20px' }}  sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Camera Settings
         </Button>
       </Link>
+      <br></br>
+      <Link href="/calibrationsettings" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Calibration Settings
+        </Button>
+      </Link>
+      <br></br>
+      <Link href="/calibration" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Calibration
+        </Button>
+      </Link>
+      <br></br>
+      <Link href="/capture" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Capture Pill Images
+        </Button>
+      </Link>
+      </div>
     </div>
   );
 };

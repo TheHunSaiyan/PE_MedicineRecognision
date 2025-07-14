@@ -32,14 +32,9 @@ class CameraParameters(BaseModel):
     brightness: int = 0
     contrast: int = 32
     saturation: int = 60
-    hue: int = 0
     white_balance_automatic: bool = False
-    gamma: int = 100
-    gain: int = 0
-    power_line_frequency: int = 1
     white_balance_temperature: int = 4600
     sharpness: int = 2
-    backlight_compensation: int = 1
     auto_exposure: int = 1
     exposure_time_absolute: int = 157
     exposure_dynamic_framerate: bool = False
@@ -51,20 +46,10 @@ class CameraParameters(BaseModel):
             raise ValueError("Contrast must be between 0 and 64")
         if not (0 <= self.saturation <= 128):
             raise ValueError("Saturation must be between 0 and 128")
-        if not (-40 <= self.hue <= 40):
-            raise ValueError("Hue must be between -40 and 40")
-        if not (72 <= self.gamma <= 500):
-            raise ValueError("Gamma must be between 72 and 500")
-        if not (0 <= self.gain <= 100):
-            raise ValueError("Gain must be between 0 and 100")
-        if not (0 <= self.power_line_frequency <= 2):
-            raise ValueError("Power line frequency must be between 0 and 2")
         if not (2800 <= self.white_balance_temperature <= 6500):
             raise ValueError("White balance temperature must be between 2800 and 6500")
         if not (0 <= self.sharpness <= 6):
             raise ValueError("Sharpness must be between 0 and 6")
-        if not (0 <= self.backlight_compensation <= 2):
-            raise ValueError("Backlight compensation must be between 0 and 2")
         if not (0 <= self.auto_exposure <= 3):
             raise ValueError("Auto exposure must be between 0 and 3")
         if not (1 <= self.exposure_time_absolute <= 5000):
@@ -177,26 +162,11 @@ def apply_camera_parameters(camera, params: CameraParameters):
         cam.set(cv2.CAP_PROP_BRIGHTNESS, params.brightness)
         cam.set(cv2.CAP_PROP_CONTRAST, params.contrast)
         cam.set(cv2.CAP_PROP_SATURATION, params.saturation)
-        cam.set(cv2.CAP_PROP_HUE, params.hue)    
-        if hasattr(cv2, 'CAP_PROP_AUTO_WB'):
-            cam.set(cv2.CAP_PROP_AUTO_WB, float(params.white_balance_automatic))    
-        if hasattr(cv2, 'CAP_PROP_GAMMA'):
-            cam.set(cv2.CAP_PROP_GAMMA, params.gamma)    
-        cam.set(cv2.CAP_PROP_GAIN, params.gain)
-        if hasattr(cv2, 'CAP_PROP_POWER_LINE_FREQUENCY'):
-            cam.set(cv2.CAP_PROP_POWER_LINE_FREQUENCY, params.power_line_frequency)
-        elif hasattr(cv2, 'CAP_PROP_IEEE1394'):
-            cam.set(cv2.CAP_PROP_IEEE1394, params.power_line_frequency)    
-        if hasattr(cv2, 'CAP_PROP_WB_TEMPERATURE'):
-            cam.set(cv2.CAP_PROP_WB_TEMPERATURE, params.white_balance_temperature)    
-        if hasattr(cv2, 'CAP_PROP_SHARPNESS'):
-            cam.set(cv2.CAP_PROP_SHARPNESS, params.sharpness)    
-        if hasattr(cv2, 'CAP_PROP_BACKLIGHT'):
-            cam.set(cv2.CAP_PROP_BACKLIGHT, params.backlight_compensation)    
-        if hasattr(cv2, 'CAP_PROP_AUTO_EXPOSURE'):
-            cam.set(cv2.CAP_PROP_AUTO_EXPOSURE, params.auto_exposure)    
-        if hasattr(cv2, 'CAP_PROP_EXPOSURE'):
-              cam.set(cv2.CAP_PROP_EXPOSURE, params.exposure_time_absolute)
+        cam.set(cv2.CAP_PROP_AUTO_WB, float(params.white_balance_automatic))  
+        cam.set(cv2.CAP_PROP_WB_TEMPERATURE, params.white_balance_temperature)
+        cam.set(cv2.CAP_PROP_SHARPNESS, params.sharpness)   
+        cam.set(cv2.CAP_PROP_AUTO_EXPOSURE, params.auto_exposure)    
+        cam.set(cv2.CAP_PROP_EXPOSURE, params.exposure_time_absolute)
         return True
     except Exception as e:
         print(f"Error applying camera parameters: {e}")
@@ -214,13 +184,9 @@ async def get_camera_settings():
                 brightness=int(cam.get(cv2.CAP_PROP_BRIGHTNESS)),
                 contrast=int(cam.get(cv2.CAP_PROP_CONTRAST)),
                 saturation=int(cam.get(cv2.CAP_PROP_SATURATION)),
-                hue=int(cam.get(cv2.CAP_PROP_HUE)),
                 white_balance_automatic=bool(cam.get(cv2.CAP_PROP_AUTO_WB)),
-                gamma=int(cam.get(cv2.CAP_PROP_GAMMA)),
-                gain=int(cam.get(cv2.CAP_PROP_GAIN)),
                 white_balance_temperature=int(cam.get(cv2.CAP_PROP_WB_TEMPERATURE)),
                 sharpness=int(cam.get(cv2.CAP_PROP_SHARPNESS)),
-                backlight_compensation=int(cam.get(cv2.CAP_PROP_BACKLIGHT)),
                 auto_exposure=int(cam.get(cv2.CAP_PROP_AUTO_EXPOSURE)),
                 exposure_time_absolute=int(cam.get(cv2.CAP_PROP_EXPOSURE))
             )
