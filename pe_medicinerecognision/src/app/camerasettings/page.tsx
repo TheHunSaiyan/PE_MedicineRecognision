@@ -34,6 +34,8 @@ const CameraSettingsForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  const [intensity, setIntensity] = useState<number>(50);
+  const [selectedLamp, setSelectedLamp] = useState('upperLamp');
   
     useEffect(() => {
       setIsMounted(true);
@@ -131,6 +133,104 @@ if (!parameters) {
       </Paper>
     );
   }
+
+ const handleUpload = async () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  
+  input.onchange = async (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    const file = target.files?.[0];
+    
+    if (!file) return;
+    
+    try {
+      setIsLoading(true);
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        try {
+          const result = event.target?.result;
+          if (typeof result === 'string') {
+            const jsonData = JSON.parse(result) as CameraParameters;
+            
+            if (typeof jsonData.brightness !== 'number' || 
+                typeof jsonData.contrast !== 'number' ||
+                typeof jsonData.saturation !== 'number' ||
+                typeof jsonData.white_balance_automatic !== 'boolean' ||
+                typeof jsonData.white_balance_temperature !== 'number' ||
+                typeof jsonData.sharpness !== 'number' ||
+                typeof jsonData.exposure_time_absolute !== 'number') {
+              throw new Error('Invalid JSON format: Missing required camera parameters');
+            }
+            
+            setParameters(jsonData);
+            setSubmitMessage('Parameters loaded successfully!');
+          }
+        } catch (error) {
+          console.error('Error parsing JSON:', error);
+          setSubmitMessage(error instanceof Error ? error.message : 'Invalid JSON file');
+        } finally {
+          setIsLoading(false);
+          setTimeout(() => setSubmitMessage(''), 3000);
+        }
+      };
+      
+      reader.onerror = () => {
+        setSubmitMessage('Error reading file');
+        setIsLoading(false);
+        setTimeout(() => setSubmitMessage(''), 3000);
+      };
+      
+      reader.readAsText(file);
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+      setSubmitMessage(error instanceof Error ? error.message : 'Failed to upload file');
+      setIsLoading(false);
+      setTimeout(() => setSubmitMessage(''), 3000);
+    }
+  };
+  
+  input.click();
+};
+
+const handleSave = () => {
+  try {
+    const jsonString = JSON.stringify(parameters, null, 2);
+    
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `camera_settings_${new Date().toISOString().slice(0, 10)}.json`;
+    
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
+    
+    setSubmitMessage('Parameters saved successfully!');
+    setTimeout(() => setSubmitMessage(''), 3000);
+  } catch (error) {
+    console.error('Error saving parameters:', error);
+    setSubmitMessage('Failed to save parameters');
+    setTimeout(() => setSubmitMessage(''), 3000);
+  }
+};
+
+const handleIntensityChange = (event: Event, newValue: number | number[]) => {
+  setIntensity(newValue as number);
+};
+
+const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedLamp(event.target.value);
+  };
 
   return (
     <div className="camera-container" style={{ padding: '20px' }}>
@@ -258,7 +358,7 @@ if (!parameters) {
         </div>
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between', 
+          flexDirection: 'column',
           gap: '10px', 
           marginTop: '20px'
         }}>
@@ -278,12 +378,28 @@ if (!parameters) {
               Reset to Defaults
             </Button>
           </div>
-  
+           <div style={{ display: 'flex', gap: '10px' }}>
+          <Button
+            variant="contained"
+            onClick={handleUpload}
+            >
+              Upload Parameters
+            </Button>
+
+            <Button
+            variant="contained"
+            onClick={handleSave}
+            >
+              Save Parameters
+            </Button>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
           <Link href="/" passHref>
             <Button variant="contained">
               Back to the Main Page
             </Button>
           </Link>
+          </div>
         </div>
 
         {submitMessage && (
@@ -312,6 +428,55 @@ if (!parameters) {
               style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
             />
           )}
+        </div>
+        <br></br>
+        <Typography variant="h5" gutterBottom>Lamps</Typography>
+        <div style={{ 
+          flex: 1,
+          minWidth: '300px',
+          border: '1px solid #ddd',
+          padding: '10px',
+          borderRadius: '8px'
+        }}>
+          <form>
+        <div>
+      <div className="radio">
+        <label>
+          <input
+            type="radio"
+            name="lampSelection"
+            value="upperLamp"
+            checked={selectedLamp === 'upperLamp'}
+            onChange={handleLampChange}
+          />
+          Upper Lamp
+        </label>
+      </div>
+      <div className="radio">
+        <label>
+          <input
+            type="radio"
+            name="lampSelection"
+            value="sideLamp"
+            checked={selectedLamp === 'sideLamp'}
+            onChange={handleLampChange}
+          />
+          Side Lamp
+        </label>
+      </div>
+    </div>
+
+        <Typography id="exposure-time-slider" gutterBottom>Light Intensity</Typography>
+                    <Slider
+                      value={intensity}
+                      onChange={handleIntensityChange}
+                      aria-labelledby="intensity-slider"
+                      min={30}
+                      max={180}
+                      step={1}
+                      valueLabelDisplay="auto"
+                    />
+      </form>
         </div>
 
         </Paper>

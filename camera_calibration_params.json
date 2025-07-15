@@ -1,0 +1,6 @@
+{
+    "chess_row": 7,
+    "chess_col": 6,
+    "square_size": 10.0,
+    "error_threshold": 0.5
+}
