@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
-import { Typography, Paper, Box, TextField, Alert } from '@mui/material';
+import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
 
 interface CameraCalibrationParams {
@@ -27,6 +27,27 @@ const CameraApp: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loadingParams, setLoadingParams] = useState<boolean>(true);
   const [progress, setProgress] = useState<number>(0);
+  const [calibrationSuccess, setCalibrationSuccess] = useState<boolean>(false);
+  const [newMatrixSuccess, setNewMatrixSuccess] = useState<boolean>(false);
+  const [undistortSuccess, setUndistortSuccess] = useState<boolean>(false);
+  const[enableStartCalibration, setEnableStartCalibration] = useState<boolean>(false);
+  const [enableNewMatrix, setEnableNewMatrix] = useState<boolean>(false);
+  const [enableUndistort, setEnableUndistort] = useState<boolean>(false);
+
+const resetProgress = () => {
+  setProgress(0);
+  setCalibrationSuccess(false);
+  setNewMatrixSuccess(false);
+  setUndistortSuccess(false);
+  setUploadStatus('');
+  setSelectedFiles([]);
+  if (fileInputRef.current) {
+    fileInputRef.current.value = '';
+  }
+  setEnableNewMatrix(false);
+  setEnableStartCalibration(false);
+  setEnableUndistort(false);
+};
 
   useEffect(() => {
     const loadCalibrationParams = async () => {
@@ -95,6 +116,11 @@ const CameraApp: React.FC = () => {
       setSelectedFiles(filesArray);
       setUploadStatus(`Selected ${filesArray.length} calibration images. Ready to process.`);
       setProgress(prev => prev + 25);
+      setEnableStartCalibration(true);
+    }
+    else {
+      resetProgress();
+      setUploadStatus('No files selected.');
     }
   };
 
@@ -140,20 +166,24 @@ const CameraApp: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
+      setCalibrationSuccess(true);
       const message = response.headers.get('message') || 'Calibration completed successfully!';
       const reprojectionError = response.headers.get('reprojection-error') || '';
       const sourceImages = response.headers.get('source-images') || '';
 
       setUploadStatus(`${message} ${reprojectionError ? `(Error: ${reprojectionError})` : ''}`);
+      setProgress(prev => prev + 25);
+      setEnableNewMatrix(true);
     } else {
+      resetProgress();
       try {
         const errorData = await response.json();
         setUploadStatus(`Calibration failed: ${errorData.detail || 'Unknown error'}`);
       } catch {
+        setCalibrationSuccess(false);
         setUploadStatus(`Calibration failed: ${response.statusText}`);
       }
     }
-    setProgress(prev => prev + 25);
   } catch (error) {
     setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
@@ -164,11 +194,189 @@ const CameraApp: React.FC = () => {
   const clearSelection = () => {
     setSelectedFiles([]);
     setUploadStatus('');
-    setProgress(prev => prev - 25);
+    resetProgress();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
+
+  const handleGenerateNewMatrix = async () => {
+  setIsProcessing(true);
+  setUploadStatus('Generating new camera matrix...');
+
+  try {
+    const response = await fetch('http://localhost:2076/generate_new_matrix_file', {
+      method: 'POST',
+    });
+
+    if (response.ok) {
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = 'undistorted_camera_matrix.npz';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      const blob = await response.blob();
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      const message = response.headers.get('message') || 'New camera matrix generated successfully!';
+      const reprojectionError = response.headers.get('reprojection_error') || '';
+      const sourceImages = response.headers.get('source_images') || '';
+
+      setUploadStatus(`${message} ${reprojectionError ? `(Reprojection error: ${reprojectionError})` : ''}`);
+      setNewMatrixSuccess(true);
+      setProgress(prev => prev + 25);
+      setEnableUndistort(true);
+    } else {
+      resetProgress();
+      try {
+        const errorData = await response.json();
+        setUploadStatus(`Failed to generate new matrix: ${errorData.detail || 'Unknown error'}`);
+      } catch {
+        setUploadStatus(`Failed to generate new matrix: ${response.statusText}`);
+      }
+    }
+  } catch (error) {
+    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+const handleUndistortImages = async () => {
+  setIsProcessing(true);
+  setUploadStatus('Undistorting calibration images...');
+
+  try {
+    const response = await fetch('http://localhost:2076/undistort_image', {
+      method: 'POST',
+    });
+
+    if (response.ok) {
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = 'undistorted_images.zip';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      const blob = await response.blob();
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      const message = response.headers.get('message') || 'Images undistorted successfully!';
+      const undistortedImagesDir = response.headers.get('undistorted_images_dir') || '';
+
+      setUploadStatus(`${message} ${undistortedImagesDir ? `(Saved to: ${undistortedImagesDir})` : ''}`);
+      setUndistortSuccess(true);
+      setProgress(prev => prev + 25);
+    } else {
+      resetProgress();
+      try {
+        const errorData = await response.json();
+        setUploadStatus(`Failed to undistort images: ${errorData.detail || 'Unknown error'}`);
+      } catch {
+        setUploadStatus(`Failed to undistort images: ${response.statusText}`);
+      }
+    }
+  } catch (error) {
+    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+const handleUploadMatrixFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  setIsProcessing(true);
+  setUploadStatus('Uploading camera matrix file...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', files[0]);
+
+    const response = await fetch('http://localhost:2076/upload_camera_calibration_npz', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setUploadStatus(`Camera matrix file uploaded successfully: ${data.filename}`);
+      setProgress(prev => prev + 50);
+      setNewMatrixSuccess(true);
+      setEnableNewMatrix(true);
+    } else {
+      resetProgress();
+      const errorData = await response.json();
+      setUploadStatus(`Upload failed: ${errorData.detail || 'Unknown error'}`);
+    }
+  } catch (error) {
+    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    setIsProcessing(false);
+    event.target.value = '';
+  }
+};
+
+const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  setIsProcessing(true);
+  setUploadStatus('Uploading undistorted matrix file...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', files[0]);
+
+    const response = await fetch('http://localhost:2076/upload_undistorted_npz', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setUploadStatus(`Undistorted matrix file uploaded successfully: ${data.filename}`);
+      setProgress(prev => prev + 75);
+      setNewMatrixSuccess(true);
+      setEnableUndistort(true);
+    } else {
+      resetProgress();
+      const errorData = await response.json();
+      setUploadStatus(`Upload failed: ${errorData.detail || 'Unknown error'}`);
+    }
+  } catch (error) {
+    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    setIsProcessing(false);
+    event.target.value = '';
+  }
+};
 
   return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
@@ -207,21 +415,43 @@ const CameraApp: React.FC = () => {
             </Button>
           )}
           <br />
-          <Button 
-            variant='contained' 
-            style={{ marginBottom: '20px' }}
-            disabled={isProcessing}
-          >
-            Select Camera Matrix File
-          </Button>
+          <input
+    type="file"
+    id="matrix-upload"
+    accept=".npz"
+    onChange={handleUploadMatrixFile}
+    style={{ display: 'none' }}
+    disabled={isProcessing}
+  />
+  <label htmlFor="matrix-upload">
+    <Button 
+      variant='contained' 
+      style={{ marginBottom: '20px' }}
+      component="span"
+      disabled={isProcessing}
+    >
+      Select Camera Matrix File
+    </Button>
+  </label>
           <br />
-          <Button 
-            variant='contained' 
-            style={{ marginBottom: '20px' }}
-            disabled={isProcessing}
-          >
-            Select New Camera Matrix File
-          </Button>
+          <input
+  type="file"
+  id="undistorted-matrix-upload"
+  accept=".npz"
+  onChange={handleUploadUndistortedMatrix}
+  style={{ display: 'none' }}
+  disabled={isProcessing}
+/>
+<label htmlFor="undistorted-matrix-upload">
+  <Button 
+    variant='contained' 
+    style={{ marginBottom: '20px' }}
+    component="span"
+    disabled={isProcessing}
+  >
+    Select New Camera Matrix File
+  </Button>
+</label>
         </div>
         <br />
         <div>
@@ -230,7 +460,7 @@ const CameraApp: React.FC = () => {
             variant='contained' 
             style={{ marginBottom: '20px' }}
             onClick={handleStartCalibration}
-            disabled={selectedFiles.length === 0 || isProcessing}
+            disabled={!enableStartCalibration || isProcessing}
           >
             {isProcessing ? 'Processing...' : 'Start Calibration'}
           </Button>
@@ -238,17 +468,19 @@ const CameraApp: React.FC = () => {
           <Button 
             variant='contained' 
             style={{ marginBottom: '20px' }}
-            disabled={true}
+            disabled={isProcessing || !enableNewMatrix}
+            onClick={handleGenerateNewMatrix}
           >
-            Generate New Camera Matrix
+            {isProcessing ? 'Generating...' : 'Generate New Camera Matrix'}
           </Button>
           <br />
           <Button 
             variant='contained' 
             style={{ marginBottom: '20px' }}
-            disabled={true} 
+            onClick={handleUndistortImages}
+            disabled={isProcessing || !enableUndistort}
           >
-            Undistort Calibration Images
+            {isProcessing ? 'Undistorting...' : 'Undistort Calibration Images'}
           </Button>
         </div>
       </div>
@@ -260,6 +492,24 @@ const CameraApp: React.FC = () => {
             {uploadStatus}
           </Typography>
         )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', width: '100%' }}>
+  <FormControlLabel
+    control={<Checkbox checked={progress >= 25} disabled />}
+    label="Images Selected"
+  />
+  <FormControlLabel
+    control={<Checkbox checked={progress >= 50} disabled />}
+    label="Calibration Done"
+  />
+  <FormControlLabel
+    control={<Checkbox checked={progress >= 75} disabled />}
+    label="Matrix Generated"
+  />
+  <FormControlLabel
+    control={<Checkbox checked={progress >= 100} disabled />}
+    label="Images Undistorted"
+  />
+</div>
         <div>
           <br />
         </div>
@@ -329,6 +579,14 @@ const CameraApp: React.FC = () => {
             Back to the Main Page
           </Button>
         </Link>
+        <Button 
+          variant="outlined" 
+          style={{ marginLeft: '10px' }}
+          onClick={resetProgress}
+          disabled={isProcessing}
+        >
+          Reset Progress
+        </Button>
       </div>
     </div>
   );
