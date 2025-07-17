@@ -737,6 +737,52 @@ async def upload_undistorted_npz(file: UploadFile = File(...)):
             detail=f"Error processing undistorted matrix file: {str(e)}"
         )
 
+@app.get("/pills")
+async def get_pills():
+    pills_file = "Pills.json"
+    if not os.path.exists(pills_file):
+        raise HTTPException(status_code=404, detail="Pills data not found")
+    
+    with open(pills_file, 'r') as f:
+        pills_data = json.load(f)
+    return pills_data
+
+@app.post("/capture_pill")
+async def capture_with_metadata(data: dict):
+    try:
+        pill_name = data.get('pill_name')
+        lamp_position = data.get('lamp_position', 'upperLamp')
+        pill_side = data.get('pill_side', 'top')
+        
+        base_dir = Path("CapturedImages")
+        pill_dir = base_dir / pill_name
+        pill_dir.mkdir(parents=True, exist_ok=True)
+        
+        existing_images = list(pill_dir.glob("*.png"))
+        next_image_number = len(existing_images)
+        
+        with lock:
+            frame = latest_frame.copy() if latest_frame is not None else None
+
+        if frame is None:
+            return {"status": "error", "error": "No frame available"}
+
+        filename = f"{next_image_number:04d}_{lamp_position}_{pill_side}.png"
+        filepath = pill_dir / filename
+        
+        cv2.imwrite(str(filepath), frame)
+        
+        return {
+            "status": "success",
+            "filename": str(filepath.relative_to(base_dir)),
+            "image_number": next_image_number,
+            "full_path": str(filepath)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in capture_with_metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server...")
