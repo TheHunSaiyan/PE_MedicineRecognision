@@ -1,35 +1,25 @@
+import cv2
+import json
+import logging
+import numpy as np
+import os
+import shutil
+import threading
+import time
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import cv2
-from datetime import datetime
-import threading
-import time
-import json
-import os
-from pathlib import Path
-from typing import Optional
-import logging
-from typing import List
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import numpy as np
-import shutil
 from io import BytesIO
+from pathlib import Path
+from pydantic import BaseModel
+from typing import Optional, List
 
 CONFIG_FILE = "camera_params.json"
 CALI_CONFIG_FILE = "camera_calibration_params.json"
-
-original_images = []
-undistorted_camera_matrix = np.empty([3, 3])
-roi = None
-camera_matrix = None
-dist_coefficients = None
-object_points = []
-rotation_vectors = []
-translation_vectors = []
-image_points = []
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -127,6 +117,48 @@ cam = None
 lock = threading.Lock()
 cam_lock = threading.Lock()
 CalibrationParameters = CameraCalibrationParameters.load_from_file()
+
+def save_calibration_data(
+    file_path: str,
+    original_images: list,
+    undistorted_camera_matrix: np.ndarray,
+    roi,
+    camera_matrix,
+    dist_coefficients,
+    object_points: list,
+    rotation_vectors: list,
+    translation_vectors: list,
+    image_points: list,
+) -> None:
+    calibration_data = {
+        "original_images": original_images,
+        "undistorted_camera_matrix": undistorted_camera_matrix.tolist(),
+        "roi": roi,
+        "camera_matrix": camera_matrix.tolist() if camera_matrix is not None else None,
+        "dist_coefficients": dist_coefficients.tolist() if dist_coefficients is not None else None,
+        "object_points": object_points,
+        "rotation_vectors": [rv.tolist() for rv in rotation_vectors],
+        "translation_vectors": [tv.tolist() for tv in translation_vectors],
+        "image_points": image_points,
+    }
+    
+    with open(file_path, "w") as f:
+        json.dump(calibration_data, f, indent=4)
+
+def load_calibration_data(file_path: str) -> dict:
+    with open(file_path, "r") as f:
+        calibration_data = json.load(f)
+    
+    calibration_data["undistorted_camera_matrix"] = np.array(calibration_data["undistorted_camera_matrix"])
+    
+    if calibration_data["camera_matrix"] is not None:
+        calibration_data["camera_matrix"] = np.array(calibration_data["camera_matrix"])
+    
+    if calibration_data["dist_coefficients"] is not None:
+        calibration_data["dist_coefficients"] = np.array(calibration_data["dist_coefficients"])
+    
+    calibration_data["rotation_vectors"] = [np.array(rv) for rv in calibration_data["rotation_vectors"]]
+    calibration_data["translation_vectors"] = [np.array(tv) for tv in calibration_data["translation_vectors"]]
 
 def camera_reader():
     global latest_frame, cam
@@ -612,8 +644,7 @@ async def undistort_image():
         
         return {
             "status": "success",
-            "message": f"Undistorted {len(undistorted_images)} images successfully.",
-            "undistorted_images": undistorted_images
+            "message": f"Undistorted {len(undistorted_images)} images successfully."
         }
         
     except HTTPException:
@@ -767,7 +798,7 @@ async def capture_with_metadata(data: dict):
         if frame is None:
             return {"status": "error", "error": "No frame available"}
 
-        filename = f"{next_image_number:04d}_{lamp_position}_{pill_side}.png"
+        filename = f"{next_image_number:04d}_{pill_name}_{lamp_position}_{pill_side}.png"
         filepath = pill_dir / filename
         
         cv2.imwrite(str(filepath), frame)

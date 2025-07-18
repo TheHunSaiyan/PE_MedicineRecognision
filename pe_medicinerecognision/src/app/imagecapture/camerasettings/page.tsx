@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Button, TextField, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider} from '@mui/material';
+import { Button, Input, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider} from '@mui/material';
 import Link from 'next/link';
 
 interface CameraParameters {
@@ -60,20 +60,62 @@ const CameraSettingsForm: React.FC = () => {
       return () => setIsMounted(false);
     }, []);
 
-     const handleSliderChange = (name: keyof CameraParameters) => (event: Event, newValue: number | number[]) => {
-    setParameters(prev => ({
-      ...prev,
-      [name]: newValue as number
-    }));
+const debounce = (func: (...args: any[]) => void, delay: number) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
   };
+};
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setParameters(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : Number(value)
-    }));
+  const sendUpdate = debounce(async (params: CameraParameters) => {
+  try {
+    const response = await fetch('http://localhost:2076/calibrate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update camera settings');
+    }
+  } catch (error) {
+    console.error('Error updating settings:', error);
+  }
+}, 300);
+
+const handleInputChange = (name: keyof CameraParameters) => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const value = Number(event.target.value);
+  if (isNaN(value)) return;
+  
+  const updatedParams = {
+    ...parameters,
+    [name]: value
   };
+  setParameters(updatedParams);
+  sendUpdate(updatedParams);
+};
+
+     const handleSliderChange = (name: keyof CameraParameters) => (event: Event, newValue: number | number[]) => {
+  const updatedParams = {
+    ...parameters,
+    [name]: newValue as number
+  };
+  setParameters(updatedParams);
+  sendUpdate(updatedParams);
+};
+
+const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, value, type, checked } = e.target;
+  const updatedParams = {
+    ...parameters,
+    [name]: type === 'checkbox' ? checked : Number(value)
+  };
+  setParameters(updatedParams);
+  sendUpdate(updatedParams);
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,27 +274,49 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedLamp(event.target.value);
   };
 
+  const handleBlur = (name: keyof CameraParameters, min: number, max: number) => (event: React.FocusEvent<HTMLInputElement>) => {
+  const value = Number(event.target.value);
+  if (isNaN(value)) {
+    event.target.value = parameters[name].toString();
+    return;
+  }
+
+  const clampedValue = Math.min(max, Math.max(min, value));
+  
+  const updatedParams = {
+    ...parameters,
+    [name]: clampedValue
+  };
+  
+  setParameters(updatedParams);
+  sendUpdate(updatedParams);
+};
+
   return (
-    <div className="camera-container" style={{ padding: '20px' }}>
-    <Container maxWidth="xl" sx={{ 
-      py: 4,
-      height: '100vh',
-      boxSizing: 'border-box'
+    <div className="camera-container" style={{minHeight: '100vh', display: 'flex',
+  flexDirection: 'column'}}>
+    <Container maxWidth="xl" sx={{
+    padding: '20px 0',
+    minHeight: '100%'
+  }}>
+      <Grid container spacing={3} sx={{ height: 'calc(100vh-64px)' }}>
+       <Grid item xs={12} md={6} style={{ display: 'flex', flexDirection: 'column' }}>
+    <Paper elevation={3} sx={{ 
+      p: 2,
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0,
+      overflow: 'auto'
     }}>
-      <Grid container spacing={3} sx={{ height: '100%' }}>
-       <Grid item xs={12} md={6}>
-    <Paper elevation={3} style={{ padding: '20px', margin: '20px 0' }}>
       <Typography variant="h5" gutterBottom>Camera Settings</Typography>
-      
-      <form onSubmit={handleSubmit}>
         <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
           gap: '16px',
           marginBottom: '20px'
         }}>
-          <div style={{ flex: '1 1 300px' }}>
+          <div>
             <Typography id="brightness-slider" gutterBottom>Brightness</Typography>
+            <div style={{ display: 'flex' }}>
                   <Slider
                     value={parameters.brightness}
                     onChange={handleSliderChange('brightness')}
@@ -261,9 +325,27 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                     max={64}
                     valueLabelDisplay="auto"
                   />
+                  <Input
+      value={parameters.brightness}
+      size="small"
+      onChange={handleInputChange('brightness')}
+      onBlur={handleBlur('brightness', -64, 64)}
+      inputProps={{
+        step: 1,
+        min: -64,
+        max: 64,
+        type: 'number',
+        'aria-labelledby': 'brightness-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
           </div>
-          <div style={{ flex: '1 1 300px' }}>
+          <div>
              <Typography id="contrast-slider" gutterBottom>Contrast</Typography>
+             <div style={{ display: 'flex' }}>
                   <Slider
                     value={parameters.contrast}
                     onChange={handleSliderChange('contrast')}
@@ -271,10 +353,27 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                     min={0}
                     max={64}
                     valueLabelDisplay="auto"
-                  />
+                  /><Input
+      value={parameters.contrast}
+      size="small"
+      onChange={handleInputChange('contrast')}
+      onBlur={handleBlur('contrast', 0, 64)}
+      inputProps={{
+        step: 1,
+        min: 0,
+        max: 64,
+        type: 'number',
+        'aria-labelledby': 'contrast-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+                </div>
           </div>
-          <div style={{ flex: '1 1 300px' }}>
+          <div>
             <Typography id="saturation-slider" gutterBottom>Saturation</Typography>
+             <div style={{ display: 'flex' }}>
                   <Slider
                     value={parameters.saturation}
                     onChange={handleSliderChange('saturation')}
@@ -283,9 +382,27 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                     max={128}
                     valueLabelDisplay="auto"
                   />
+                  <Input
+      value={parameters.saturation}
+      size="small"
+      onChange={handleInputChange('saturation')}
+      onBlur={handleBlur('saturation', 0, 128)}
+      inputProps={{
+        step: 1,
+        min: 0,
+        max: 128,
+        type: 'number',
+        'aria-labelledby': 'saturation-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
           </div>
-          <div style={{ flex: '1 1 300px' }}>
+          <div>
              <Typography id="sharpness-slider" gutterBottom>Sharpness</Typography>
+              <div style={{ display: 'flex' }}>
                   <Slider
                     value={parameters.sharpness}
                     onChange={handleSliderChange('sharpness')}
@@ -296,17 +413,31 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                     marks
                     valueLabelDisplay="auto"
                   />
+                  <Input
+      value={parameters.sharpness}
+      size="small"
+      onChange={handleInputChange('sharpness')}
+      onBlur={handleBlur('sharpness', 0, 6)}
+      inputProps={{
+        step: 1,
+        min: 0,
+        max: 6,
+        type: 'number',
+        'aria-labelledby': 'sharpness-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
           </div>
         </div>
 
-        <div style={{ margin: '20px 0' }}>
+        <div>
           <Typography variant="subtitle1" gutterBottom>White Balance</Typography>
           <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
             gap: '16px',
             alignItems: 'center',
-            marginBottom: '16px'
           }}>
             <FormControlLabel
               control={
@@ -320,6 +451,7 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
             />
             <div style={{ flex: '1 1 300px' }}>
               <Typography id="white-balance-slider" gutterBottom>White Balance Temperature</Typography>
+              <div style={{ display: 'flex' }}>
                     <Slider
                       value={parameters.white_balance_temperature}
                       onChange={handleSliderChange('white_balance_temperature')}
@@ -330,11 +462,29 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                       valueLabelDisplay="auto"
                       disabled={parameters.white_balance_automatic}
                     />
+                    <Input
+      disabled={parameters.white_balance_automatic}
+      value={parameters.white_balance_temperature}
+      size="small"
+      onChange={handleInputChange('white_balance_temperature')}
+      onBlur={handleBlur('white_balance_temperature', 2800, 6500)}
+      inputProps={{
+        step: 100,
+        min: 2800,
+        max: 6500,
+        type: 'number',
+        'aria-labelledby': 'white_balance_temperature-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
             </div>
           </div>
         </div>
 
-        <div style={{ margin: '20px 0' }}>
+        <div>
           <Typography variant="subtitle1" gutterBottom>Exposure</Typography>
           <div style={{
             display: 'flex',
@@ -344,6 +494,7 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
           }}>
             <div style={{ flex: '1 1 300px' }}>
               <Typography id="exposure-time-slider" gutterBottom>Exposure Time Absolute</Typography>
+              <div style={{ display: 'flex' }}>
                     <Slider
                       value={parameters.exposure_time_absolute}
                       onChange={handleSliderChange('exposure_time_absolute')}
@@ -353,92 +504,30 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                       step={100}
                       valueLabelDisplay="auto"
                     />
+                    <Input
+      value={parameters.exposure_time_absolute}
+      size="small"
+      onChange={handleInputChange('exposure_time_absolute')}
+      onBlur={handleBlur('exposure_time_absolute', 1, 5000)}
+      inputProps={{
+        step: 100,
+        min: 1,
+        max: 5000,
+        type: 'number',
+        'aria-labelledby': 'exposure_time_absolute-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
             </div>
           </div>
-        </div>
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column',
-          gap: '10px', 
-          marginTop: '20px'
-        }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Applying...' : 'Apply Settings'}
-            </Button>
-            <Button
-            variant="outlined"
-            onClick={resetToDefaults}
-            >
-              Reset to Defaults
-            </Button>
-          </div>
-           <div style={{ display: 'flex', gap: '10px' }}>
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            >
-              Upload Parameters
-            </Button>
-
-            <Button
-            variant="contained"
-            onClick={handleSave}
-            >
-              Save Parameters
-            </Button>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-          <Link href="/" passHref>
-            <Button variant="contained">
-              Back to the Main Page
-            </Button>
-          </Link>
-          </div>
-        </div>
-
-        {submitMessage && (
-          <Typography color={submitMessage.includes('success') ? 'success' : 'error'} style={{ marginTop: '10px' }}>
-            {submitMessage}
-          </Typography>
-        )}
-      </form>
-    </Paper>
-    </Grid>
-    
-    <Grid item xs={12} md={6}>
-      <Paper elevation={3} style={{ padding: '20px', margin: '20px 0' }}>
-      <Typography variant="h5" gutterBottom>Live Feed</Typography>
-        <div style={{ 
-          flex: 1,
+          <Typography variant="h5" gutterBottom>Lamps</Typography>
+        <div style={{
           minWidth: '300px',
-          border: '1px solid #ddd',
           padding: '10px',
-          borderRadius: '8px'
         }}>
-          {isMounted && (
-            <img
-              src="http://localhost:2076/video_feed"
-              alt="Live Camera Feed"
-              style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
-            />
-          )}
-        </div>
-        <br></br>
-        <Typography variant="h5" gutterBottom>Lamps</Typography>
-        <div style={{ 
-          flex: 1,
-          minWidth: '300px',
-          border: '1px solid #ddd',
-          padding: '10px',
-          borderRadius: '8px'
-        }}>
-          <form>
         <div>
       <div className="radio">
         <label>
@@ -467,6 +556,7 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     </div>
 
         <Typography id="exposure-time-slider" gutterBottom>Light Intensity</Typography>
+        <div style={{ display: 'flex' }}>
                     <Slider
                       value={intensity}
                       onChange={handleIntensityChange}
@@ -476,9 +566,94 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                       step={1}
                       valueLabelDisplay="auto"
                     />
-      </form>
+                    <Input
+      value={intensity}
+      size="small"
+      //onChange={handleIntensityChange}
+      //onBlur={handleBlur('exposure_time_absolute', 1, 5000)}
+      inputProps={{
+        step: 1,
+        min: 30,
+        max: 180,
+        type: 'number',
+        'aria-labelledby': 'intensity-slider',
+      }}
+      sx={{ width: '80px' }}
+
+      style={{ marginLeft: '20px' }}
+    />
+    </div>
+        </div>
+        </div>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          gap: '10px', 
+          marginTop: '20px'
+        }}>
+           <div style={{ display: 'flex', gap: '10px' }}>
+          <Button
+            variant="contained"
+            onClick={handleUpload}
+            >
+              Upload Parameters
+            </Button>
+
+            <Button
+            variant="contained"
+            onClick={handleSave}
+            >
+              Save Parameters
+            </Button>
+             <Button
+            variant="outlined"
+            onClick={resetToDefaults}
+            >
+              Reset to Defaults
+            </Button>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+          <Link href="/imagecapture" passHref>
+            <Button variant="contained">
+              Back to Image Capture Page
+            </Button>
+          </Link>
+          </div>
         </div>
 
+        {submitMessage && (
+          <Typography color={submitMessage.includes('success') ? 'success' : 'error'} style={{ marginTop: '10px' }}>
+            {submitMessage}
+          </Typography>
+        )}
+    </Paper>
+    </Grid>
+    
+    <Grid item xs={12} md={6} style={{ display: 'flex', flexDirection: 'column' }}>
+      <Paper elevation={3} sx={{ 
+      p: 2,
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0
+    }}>
+      <Typography variant="h5" gutterBottom>Live Feed</Typography>
+        <div style={{ 
+          flex: 1,
+          minWidth: '300px',
+          border: '1px solid #ddd',
+          padding: '10px',
+          borderRadius: '8px'
+        }}>
+          {isMounted && (
+            <img
+              src="http://localhost:2076/video_feed"
+              alt="Live Camera Feed"
+              style={{ width: '100%', maxWidth: '640px', border: '1px solid #ccc' }}
+            />
+          )}
+        </div>
+        <br></br>
         </Paper>
         </Grid>
     </Grid>

@@ -17,7 +17,7 @@ const CameraApp: React.FC = () => {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <br></br>
-      <Link href="/imagecapture" passHref>
+      <Link href="/imagecapture/camerasettings" passHref>
         <Button variant="contained" style={{ marginLeft: '10px', marginBottom:'20px' }}  sx={{
     width: {
       xs: '100%',
@@ -30,11 +30,11 @@ const CameraApp: React.FC = () => {
     borderRadius: '8px',
     boxShadow: 3
   }}>
-          Image Capture
+          Camera Settings
         </Button>
       </Link>
       <br></br>
-      <Link href="/datapreparation" passHref>
+      <Link href="/imagecapture/capturecalibration" passHref>
         <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
     width: {
       xs: '100%',
@@ -47,11 +47,11 @@ const CameraApp: React.FC = () => {
     borderRadius: '8px',
     boxShadow: 3
   }}>
-          Data Preparation
+          Capture Calibration Images
         </Button>
       </Link>
       <br></br>
-      <Link href="/dispenseverification" passHref>
+      <Link href="/imagecapture/calibrationsettings" passHref>
         <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
     width: {
       xs: '100%',
@@ -64,7 +64,41 @@ const CameraApp: React.FC = () => {
     borderRadius: '8px',
     boxShadow: 3
   }}>
-          Dispense Verification
+          Calibration Settings
+        </Button>
+      </Link>
+      <br></br>
+      <Link href="/imagecapture/capture" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Capture Pill Images
+        </Button>
+      </Link>
+      <br></br>
+      <Link href="/" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Main Page
         </Button>
       </Link>
       </div>

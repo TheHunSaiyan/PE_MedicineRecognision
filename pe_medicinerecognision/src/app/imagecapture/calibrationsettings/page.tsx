@@ -265,26 +265,6 @@ const handleUndistortImages = async () => {
     });
 
     if (response.ok) {
-      const contentDisposition = response.headers.get('content-disposition');
-      let filename = 'undistorted_images.zip';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-        if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1];
-        }
-      }
-
-      const blob = await response.blob();
-      
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
 
       const message = response.headers.get('message') || 'Images undistorted successfully!';
       const undistortedImagesDir = response.headers.get('undistorted_images_dir') || '';
@@ -380,7 +360,7 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
 
   return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: '1 1 33%' }}>
         <div>
           <Typography id="selection" gutterBottom>File Selection</Typography>
           <input
@@ -484,9 +464,9 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
           </Button>
         </div>
       </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: '1 1 66%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Typography id="status" gutterBottom>Status</Typography>
-        <LinearProgress variant="determinate" value={progress} />
+        <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
         {uploadStatus && (
           <Typography variant="body2" style={{ marginTop: '10px' }}>
             {uploadStatus}
@@ -574,9 +554,9 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
         left: '20px',
         bottom: '20px'
       }}>
-        <Link href="/" passHref>
+        <Link href="/imagecapture" passHref>
           <Button variant="contained">
-            Back to the Main Page
+            Back to Image Capture Page
           </Button>
         </Link>
         <Button 
