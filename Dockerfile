@@ -17,4 +17,6 @@ RUN pip3 install python-multipart
 
 COPY . .
 
-CMD uvicorn main:app --host=0.0.0.0 --reload
+RUN mkdir -p /app/CapturedImages /app/CalibrationImages /app/UndistortedImages
+
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "2076"]

@@ -7,10 +7,16 @@ services:
       - "2076:2076"
     volumes:
       - .:/app
+      - ./CapturedImages:/app/CapturedImages
+      - ./CalibrationImages:/app/CalibrationImages
+      - ./UndistortedImages:/app/UndistortedImages
+      - ./camera_calibration_params:/app/camera_calibration_params
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "2076", "--reload"]
+    environment:
+      - PYTHONPATH=/app
+    command: ["sh", "-c", "if [ \"$UVICORN_RELOAD\" = \"true\" ]; then uvicorn api_server:app --host 0.0.0.0 --port 2076 --reload; else python api_server.py; fi"]
 
   kiroshi:
     image: node:18
