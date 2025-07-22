@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from pathlib import Path
 
 from config import AppConfig
+from logger import logger
 
 class CapturePill:
     def __init__(self, camera_controller):
@@ -13,6 +14,7 @@ class CapturePill:
     
     async def get_pills(self):
         if not os.path.exists(AppConfig.PILLS_DATA_FILE):
+            logger.error("Pills data not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Pills data not found"
@@ -23,6 +25,7 @@ class CapturePill:
                 pills_data = json.load(f)
             return pills_data
         except Exception as e:
+            logger.error(f"Failed to load pills data: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to load pills data: {str(e)}"
@@ -32,6 +35,7 @@ class CapturePill:
         try:
             pill_name = data.get('pill_name')
             if not pill_name:
+                logger.error("Pill name is required")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Pill name is required"
@@ -48,6 +52,7 @@ class CapturePill:
             
             frame = self.camera.get_frame()
             if frame is None:
+                logger.error("No frame available")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="No frame available"
@@ -68,6 +73,7 @@ class CapturePill:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)

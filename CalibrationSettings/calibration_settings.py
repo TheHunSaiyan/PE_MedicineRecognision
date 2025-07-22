@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from io import BytesIO
 
 from config import AppConfig
+from logger import logger
 
 class CalibrationSettings:
     def __init__(self, calibration_manager):
@@ -16,6 +17,7 @@ class CalibrationSettings:
     async def get_camera_calibration_settings(self):
         params = self.calibration_manager.load_calibration_parameters()
         if params is None:
+            logger.error("Camera calibration parameters not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Camera calibration parameters not found"
@@ -30,11 +32,13 @@ class CalibrationSettings:
                 "message": "Camera calibration parameters saved successfully"
             }
         except ValueError as e:
+            logger.error(str(e))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
             )
         except Exception as e:
+            logger.error(f"Failed to save calibration parameters: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to save calibration parameters: {str(e)}"
@@ -43,6 +47,7 @@ class CalibrationSettings:
     async def upload_calibration_images(self, files):
         try:
             if not self.calibration_manager.load_calibration_parameters():
+                logger.error("Calibration parameters not configured")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Calibration parameters not configured"
@@ -88,13 +93,16 @@ class CalibrationSettings:
                         saved_images.append(file_path)
                         good_files += 1
                     else:
+                        logger.warning(f"Chessboard not found in {filename}")
                         os.remove(file_path)
                 except Exception as e:
+                    logger.warning(f"Error processing {filename}: {str(e)}")
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     continue
     
             if good_files == 0:
+                logger.error("No valid calibration images found. Could not detect chessboard in any image.")
                 raise HTTPException(
                     status_code=400, 
                     detail="No valid calibration images found. Could not detect chessboard in any image."
@@ -116,6 +124,7 @@ class CalibrationSettings:
             )
     
             if not ret:
+                logger.error("Camera calibration failed")
                 raise HTTPException(
                     status_code=500, 
                     detail="Camera calibration failed"
@@ -148,6 +157,7 @@ class CalibrationSettings:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Unexpected error during calibration: {str(e)}")
             raise HTTPException(
                 status_code=500, 
                 detail=f"Unexpected error during calibration: {str(e)}"
@@ -166,6 +176,7 @@ class CalibrationSettings:
             
             for key in required_keys:
                 if key not in calibration_data:
+                    logger.error(f"Missing required data in calibration file: {key}")
                     raise HTTPException(
                         status_code=400,
                         detail=f"Missing required data in calibration file: {key}"
@@ -180,6 +191,7 @@ class CalibrationSettings:
             original_image_paths = calibration_data['original_image_paths']
     
             if len(original_image_paths) == 0:
+                logger.error("No original images found in calibration data")
                 raise HTTPException(
                     status_code=400,
                     detail="No original images found in calibration data"
@@ -188,6 +200,7 @@ class CalibrationSettings:
             first_image_path = original_image_paths[0]
             first_image = cv2.imread(first_image_path)
             if first_image is None:
+                logger.error(f"Could not read first calibration image at {first_image_path}")
                 raise HTTPException(
                     status_code=400,
                     detail=f"Could not read first calibration image at {first_image_path}"
@@ -226,6 +239,7 @@ class CalibrationSettings:
                 valid_projections += 1
     
             if valid_projections == 0:
+                logger.error("Could not calculate reprojection error - no valid projections")
                 raise HTTPException(
                     status_code=500,
                     detail="Could not calculate reprojection error - no valid projections"
@@ -234,6 +248,7 @@ class CalibrationSettings:
             errors = error_count / valid_projections
             
             if errors > self.calibration_manager.calibration_params.error_threshold:
+                logger.error(f"Calibration error too high: {errors:.2f}. Please check your images.")
                 raise HTTPException(
                     status_code=500,
                     detail=f"Calibration error too high: {errors:.2f}. Please check your images.",
@@ -266,6 +281,7 @@ class CalibrationSettings:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Error generating new matrix file: {str(e)}")
             raise HTTPException(
                 status_code=500, 
                 detail=f"Error generating new matrix file: {str(e)}"
@@ -308,9 +324,11 @@ class CalibrationSettings:
                     undistorted_images.append(output_path)
     
                 except Exception as e:
+                    logger.warning(str(e))
                     continue
     
             if not undistorted_images:
+                logger.error("No images were successfully undistorted")
                 raise HTTPException(
                     status_code=500,
                     detail="No images were successfully undistorted"
@@ -324,6 +342,7 @@ class CalibrationSettings:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Error undistorting images: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Error undistorting images: {str(e)}"
@@ -345,6 +364,7 @@ class CalibrationSettings:
             
             for key in required_keys:
                 if key not in calibration_data:
+                    logger.error(f"Missing required data in calibration file: {key}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Missing required data in calibration file: {key}"
@@ -373,6 +393,7 @@ class CalibrationSettings:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Failed to process calibration file: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to process calibration file: {str(e)}"
@@ -398,6 +419,7 @@ class CalibrationSettings:
             
             for key in required_keys:
                 if key not in calibration_data:
+                    logger.error(f"Missing required data in undistorted matrix file: {key}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Missing required data in undistorted matrix file: {key}"
@@ -428,6 +450,7 @@ class CalibrationSettings:
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Failed to process undistorted matrix file: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to process undistorted matrix file: {str(e)}"

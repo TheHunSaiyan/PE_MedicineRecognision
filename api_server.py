@@ -10,7 +10,6 @@ import json
 import os
 import shutil
 import time
-import logging
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 import threading
@@ -24,8 +23,8 @@ from config import AppConfig
 from CameraSettings.camera_settings import CameraSettings
 from CalibrationSettings.calibration_settings import CalibrationSettings
 from CapturePill.capture_pill import CapturePill
-
-logger = logging.getLogger(__name__)
+from logger import logger
+from SplitDataset.splitdataset import SplitDataset
 
 class APIServer:
     def __init__(self):
@@ -39,6 +38,7 @@ class APIServer:
         self.camera_settings = CameraSettings(self.camera)
         self.calibration_settings = CalibrationSettings(self.calibration_manager)
         self.capture_pill = CapturePill(self.camera)
+        self.splitdataset = SplitDataset()
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -121,6 +121,14 @@ class APIServer:
         @self.app.post("/capture_pill")
         async def capture_with_metadata(data: Dict[str, Any]):
             return await self.capture_pill.capture_with_metadata(data)
+        
+        @self.app.get("/data_availability")
+        async def get_data_availability():
+            return await self.splitdataset.get_data_availability()
+        
+        @self.app.post("/start_split")
+        async def start_split(data: Dict[str, Any]):
+            return await self.splitdataset.start_split(data)
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn
@@ -128,9 +136,5 @@ class APIServer:
         uvicorn.run(self.app, host=host, port=port)
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
     server = APIServer()
     server.run()

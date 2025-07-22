@@ -3,10 +3,10 @@ from fastapi.responses import StreamingResponse
 from datetime import datetime
 import cv2
 import time
-import logging
 from typing import Dict, Any
 
 from config import AppConfig
+from logger import logger
 
 class CameraSettings:
     def __init__(self, camera_controller):
@@ -36,6 +36,7 @@ class CameraSettings:
     async def capture_image(self) -> Dict[str, Any]:
         frame = self.camera.get_frame()
         if frame is None:
+            logger.error("No frame available")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="No frame available"
@@ -44,6 +45,7 @@ class CameraSettings:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
         filename = f"{AppConfig.CAPTURED_IMAGES_DIR}/{timestamp}.png"
         cv2.imwrite(filename, frame)
+        logger.info(f"Image saved: {filename}")
         
         return {
             "status": "success", 
@@ -55,6 +57,7 @@ class CameraSettings:
             params = self.camera.get_current_parameters()
             return params.dict()
         except Exception as e:
+            logger.error(f"Failed to get camera settings: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get camera settings: {str(e)}"
@@ -69,16 +72,19 @@ class CameraSettings:
                     "message": "Camera parameters updated and saved"
                 }
             else:
+                logger.error("Failed to apply some camera parameters")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to apply some camera parameters"
                 )
         except ValueError as e:
+            logger.error(str(e))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
             )
         except Exception as e:
+            logger.error(f"Failed to set camera parameters: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to set camera parameters: {str(e)}"

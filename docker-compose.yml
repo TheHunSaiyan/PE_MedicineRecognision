@@ -11,6 +11,7 @@ services:
       - ./CalibrationImages:/app/CalibrationImages
       - ./UndistortedImages:/app/UndistortedImages
       - ./camera_calibration_params:/app/camera_calibration_params
+      - ./SplitDataset:/app/SplitDataset
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true

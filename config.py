@@ -7,6 +7,11 @@ class AppConfig:
     CALIBRATION_IMAGES_DIR = "CalibrationImages"
     UNDISTORTED_IMAGES_DIR = "UndistortedImages"
     PILLS_DATA_FILE = "Pills.json"
+    LOG = "Logs"
+    DATASET_IMAGES = "Dataset/images"
+    DATASET_LABELS = "Dataset/segmentation_labels"
+    DATASET_MASKS = "Dataset/mask_images"
+    SPLIT_DATASET = "Split"
     
     @classmethod
     def ensure_directories_exist(cls):
