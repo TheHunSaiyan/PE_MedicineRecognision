@@ -3,6 +3,7 @@ import random
 import shutil
 
 from fastapi import HTTPException, status
+from pydantic import BaseModel
 from typing import Dict, List, Tuple
 
 from config import AppConfig

@@ -12,6 +12,16 @@ class AppConfig:
     DATASET_LABELS = "Dataset/segmentation_labels"
     DATASET_MASKS = "Dataset/mask_images"
     SPLIT_DATASET = "Split"
+    SPLIT_TRAIN_IMAGES = "Split/train/images"
+    SPLIT_TRAIN_LABELS = "Split/train/labels"
+    SPLIT_TRAIN_MASKS = "Split/train/masks"
+    SPLIT_VAL_IMAGES = "Split/val/images"
+    SPLIT_VAL_LABELS = "Split/val/labels"
+    SPLIT_VAL_MASKS = "Split/val/masks"
+    AUG_IMAGES = "Augmentation/images"
+    AUG_MASKS = "Augmentation/masks"
+    AUG_ANN = "Augmentation/annotation"
+    BACKGROUND_IMAGES = "BackGroundImages"
     
     @classmethod
     def ensure_directories_exist(cls):

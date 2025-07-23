@@ -25,6 +25,7 @@ from CalibrationSettings.calibration_settings import CalibrationSettings
 from CapturePill.capture_pill import CapturePill
 from logger import logger
 from SplitDataset.splitdataset import SplitDataset
+from AugmentImage.augment_image import AugmentImage
 
 class APIServer:
     def __init__(self):
@@ -39,6 +40,7 @@ class APIServer:
         self.calibration_settings = CalibrationSettings(self.calibration_manager)
         self.capture_pill = CapturePill(self.camera)
         self.splitdataset = SplitDataset()
+        self.augment_image = AugmentImage()
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -129,6 +131,10 @@ class APIServer:
         @self.app.post("/start_split")
         async def start_split(data: Dict[str, Any]):
             return await self.splitdataset.start_split(data)
+        
+        @self.app.post("/start_augmentation")
+        async def start_augmentation(data: Dict[str, Any]):
+            return await self.augment_image.start_augmentation(data)
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn
