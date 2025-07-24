@@ -5,7 +5,9 @@ import numpy as np
 import random
 import shutil
 import qrcode
+
 from PIL import Image
+from typing import Dict, Any, Optional
 
 from config import AppConfig
 from logger import logger
@@ -20,6 +22,9 @@ class AugmentImage:
         self.aug_annotation_path = AppConfig.AUG_ANN
         self.backgrounds_path = AppConfig.BACKGROUND_IMAGES
         self.stop_event = stop_event
+        self._current_progress = 0
+        self._total_files = 0
+        self._processed_files = 0
 
 
     def clear_output_directories(self):
@@ -124,32 +129,56 @@ class AugmentImage:
         return composite
 
 
+    def generate_rA9(self):
+        while True:
+            letter1 = random.choice('abcdefghijklmnopqrstuvwxyz')
+            letter2 = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+            val1 = ord(letter1) - ord('a') + 1
+            val2 = ord(letter2) - ord('A') + 1
+            number = 28 - (val1 + val2)
+            if number > 0:
+                return f"{letter1}{letter2}{number}"
+
     def qr_code(self, image):
-        qr_url = "https://youtu.be/dQw4w9WgXcQ"
-        qr = qrcode.make(qr_url)
+        random_code = self.generate_rA9()
+        
+        qr = qrcode.make(random_code)
         qr = qr.convert("RGB")
         qr = np.array(qr)
         qr = cv2.cvtColor(qr, cv2.COLOR_RGB2BGR)
     
-        qr = cv2.resize(qr, (100, 100), interpolation=cv2.INTER_AREA)
+        qr = cv2.resize(qr, (400, 400), interpolation=cv2.INTER_AREA)
     
         h, w = image.shape[:2]
         qr_h, qr_w = qr.shape[:2]
     
-        y1 = (h // 2) - (qr_h // 2)
+        x1 = w - qr_w - 175
+        x2 = x1 + qr_w
+        y1 = (h // 2) - (qr_h // 2) - 50
         y2 = y1 + qr_h
-        x1 = w - qr_w
-        x2 = w
     
         roi = image[y1:y2, x1:x2]
     
-        blended = cv2.addWeighted(roi, 0.7, qr, 0.3, 0)
+        blended = cv2.addWeighted(roi, 0.3, qr, 0.7, 0)
         image[y1:y2, x1:x2] = blended
         return image
 
+    async def get_progress(self) -> Dict[str, Any]:
+        progress = 0
+        if self._total_files > 0:
+            progress = (self._processed_files / self._total_files) * 100
+        
+        return {
+            "current": self._processed_files,
+            "total": self._total_files,
+            "progress": progress,
+            "status": "Processing" if progress < 100 else "Completed"
+        }
 
     async def start_augmentation(self, data):
         self.clear_output_directories()
+        self._processed_files = 0
+        self._total_files = 0
         
         for img_file, mask_file, ann_file in self.get_image_triplets():
             base_name = os.path.splitext(os.path.basename(img_file))[0]
@@ -177,6 +206,7 @@ class AugmentImage:
                image = self.qr_code(image)
     
             self.save_data(image, mask, method="combined", txt_op="copy", txt_file=ann_file, base_name=base_name)
+            self._processed_files += 1
             
         logger.info("Successfull augmentation.")
         return {

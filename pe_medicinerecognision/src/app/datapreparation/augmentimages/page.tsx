@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Snackbar } from '@mui/material';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import InputAdornment from '@mui/material/InputAdornment';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
+import LinearProgress from '@mui/material/LinearProgress';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -32,6 +33,13 @@ interface Augmentation {
     augmentation_per_image: number;
 }
 
+interface ProgressData {
+    current: number;
+    total: number;
+    progress: number;
+    status: string;
+}
+
 const CameraApp: React.FC = () => {
 const [availability, setAvailability] = useState<DataAvailability>({
     images: false,
@@ -54,6 +62,13 @@ const [availability, setAvailability] = useState<DataAvailability>({
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [progress, setProgress] = useState<ProgressData>({
+    current: 0,
+    total: 0,
+    progress: 0,
+    status: 'Idle'
+  });
+ const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
   useEffect(() => {
@@ -103,9 +118,47 @@ const handleAugmentationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSnackbarOpen(false);
   };
 
+ const checkProgress = async () => {
+  let done = false;
+
+  while (!done) {
+    try {
+      const response = await fetch('http://localhost:2076/get_augmentation_progress');
+      if (!response.ok) {
+        throw new Error('Failed to fetch progress');
+      }
+
+      const data = await response.json();
+      console.log("Progress data:", data);
+      setProgress(data);
+
+      if (data.progress >= 100) {
+        setIsProcessing(false);
+        setSnackbarOpen(true);
+        done = true;
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (err) {
+      console.error('Error checking progress:', err);
+      setIsProcessing(false);
+      done = true;
+    }
+  }
+};
+
+
   const startAugmentation = async () => {
     setIsProcessing(true);
     setError(null);
+
+    setProgress({
+      current: 0,
+      total: 0,
+      progress: 0,
+      status: 'Starting...'
+    });
+
     try {
       const response = await fetch('http://localhost:2076/start_augmentation', {
         method: 'POST',
@@ -117,15 +170,16 @@ const handleAugmentationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
       if (!response.ok) {
         throw new Error('Failed to start augmentation');
-      }
-
+      } 
+      checkProgress();
       const data = await response.json();
+      console.log("Calling checkProgress...");
       setSnackbarOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsProcessing(false);
-    }
+    } //finally {
+    //   setIsProcessing(false);
+    // }
   };
 
 return (
@@ -257,6 +311,18 @@ return (
                            >
                              {isProcessing ? 'Processing...' : 'Start Augmentation'}
                            </Button>
+                           {isProcessing && (
+                              <>
+                                <LinearProgress 
+                                  variant="determinate" 
+                                  value={progress.progress} 
+                                  style={{ width: '100%' }} 
+                                />
+                                <Typography variant="body2" style={{ marginTop: '10px' }}>
+                                  {progress.status}: {progress.current}/{progress.total} images processed ({Math.round(progress.progress)}%)
+                                </Typography>
+                              </>
+                            )}
                          </Box>
                       </Box>
                       </Paper>

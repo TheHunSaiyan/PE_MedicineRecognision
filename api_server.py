@@ -135,6 +135,10 @@ class APIServer:
         @self.app.post("/start_augmentation")
         async def start_augmentation(data: Dict[str, Any]):
             return await self.augment_image.start_augmentation(data)
+        
+        @self.app.get("/get_augmentation_progress")
+        async def get_au_progress():
+            return await self.augment_image.get_progress()
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn
