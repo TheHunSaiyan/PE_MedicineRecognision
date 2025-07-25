@@ -64,15 +64,22 @@ class AugmentImage:
 
     def get_image_triplets(self):
         files = sorted(glob.glob(os.path.join(self.image_path, "*.*")))
+        self._total_files = 0
         
         print(f"Found {len(files)} image files")
         
+        valid_triplets = []
         for img_file in files:
             base_name = os.path.splitext(os.path.basename(img_file))[0]
             mask_file = os.path.join(self.mask_path, f"{base_name}.jpg")
             ann_file = os.path.join(self.annotation_path, f"{base_name}.txt")
             if os.path.exists(mask_file) and os.path.exists(ann_file):
-                yield img_file, mask_file, ann_file
+                valid_triplets.append((img_file, mask_file, ann_file))
+        
+        self._total_files = len(valid_triplets)
+        for triplet in valid_triplets:
+            yield triplet
+
 
     def apply_white_balance(self, image):
         scale_factors = np.random.uniform(0.7, 1.2, size=(3,))
@@ -175,7 +182,7 @@ class AugmentImage:
             "status": "Processing" if progress < 100 else "Completed"
         }
 
-    async def start_augmentation(self, data):
+    def start_augmentation(self, data):
         self.clear_output_directories()
         self._processed_files = 0
         self._total_files = 0

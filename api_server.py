@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, status
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from io import BytesIO
 from datetime import datetime
 import cv2
@@ -17,7 +18,8 @@ import concurrent.futures
 
 from camera_controller import CameraController
 from calibration_manager import CalibrationManager
-from models import CameraParameters, CameraCalibrationParameters
+from led_controller import LEDController
+from models import CameraParameters, CameraCalibrationParameters, LEDParameters
 from config import AppConfig
 
 from CameraSettings.camera_settings import CameraSettings
@@ -31,12 +33,13 @@ class APIServer:
     def __init__(self):
         self.app = FastAPI()
         self.camera = CameraController()
+        self.led = LEDController(port=os.path.join("/dev/", "ttyACM0"), baud=115200)
         self.calibration_manager = CalibrationManager()
         self.lock = threading.Lock()
         self.setup_middleware()
         self.setup_routes()
         AppConfig.ensure_directories_exist()
-        self.camera_settings = CameraSettings(self.camera)
+        self.camera_settings = CameraSettings(self.camera, self.led)
         self.calibration_settings = CalibrationSettings(self.calibration_manager)
         self.capture_pill = CapturePill(self.camera)
         self.splitdataset = SplitDataset()
@@ -87,6 +90,14 @@ class APIServer:
         @self.app.post("/calibrate")
         async def update_camera_settings(params: CameraParameters):
             return await self.camera_settings.update_camera_settings(params)
+        
+        @self.app.post("/led_control")
+        async def led_control(params: LEDParameters):
+            return await self.camera_settings.led_control(params)
+        
+        @self.app.get("/led_settings")
+        async def led_settings():
+            return await self.camera_settings.led_settings()
 
         @self.app.get("/camera_calibration_parameters")
         async def get_camera_calibration_parameters():
@@ -134,7 +145,8 @@ class APIServer:
         
         @self.app.post("/start_augmentation")
         async def start_augmentation(data: Dict[str, Any]):
-            return await self.augment_image.start_augmentation(data)
+            return await run_in_threadpool(self.augment_image.start_augmentation, data)
+
         
         @self.app.get("/get_augmentation_progress")
         async def get_au_progress():

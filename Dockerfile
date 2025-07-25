@@ -16,6 +16,7 @@ RUN pip3 install -r requirements.txt
 RUN pip3 install python-multipart
 RUN pip3 install pillow
 RUN pip3 install qrcode pillow
+RUN pip3 install pyserial
 
 
 COPY . .

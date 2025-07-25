@@ -7,10 +7,12 @@ from typing import Dict, Any
 
 from config import AppConfig
 from logger import logger
+from models import LEDParameters
 
 class CameraSettings:
-    def __init__(self, camera_controller):
+    def __init__(self, camera_controller, led_controller):
         self.camera = camera_controller
+        self.led = led_controller
 
     async def video_feed(self):
         def generate():
@@ -76,7 +78,7 @@ class CameraSettings:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to apply some camera parameters"
-                )
+                )                
         except ValueError as e:
             logger.error(str(e))
             raise HTTPException(
@@ -89,3 +91,35 @@ class CameraSettings:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to set camera parameters: {str(e)}"
             )
+            
+    async def led_control(self, params):
+        try:
+            side_value = params.side_led
+            upper_value = params.upper_led
+            print(f"{upper_value} : {side_value}")
+            
+            self.led.set_values(side_value, 9)
+            self.led.set_values(side_value, 10)
+            self.led.set_values(upper_value, 11)
+            
+            params.save_to_file()
+            
+            return {
+                "status": "success",
+                "message": "LED values updated",
+                "led_values": params
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        
+    async def led_settings(self) -> Dict[str, Any]:
+        try:
+            params = LEDParameters.load_from_file()
+            return params.dict()
+        except Exception as e:
+            logger.error(f"Failed to get camera settings: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get camera settings: {str(e)}"
+            )
+        

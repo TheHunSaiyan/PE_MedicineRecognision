@@ -70,7 +70,6 @@ const [availability, setAvailability] = useState<DataAvailability>({
   });
  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-
   useEffect(() => {
     const fetchDataAvailability = async () => {
       try {
@@ -119,68 +118,70 @@ const handleAugmentationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
  const checkProgress = async () => {
-  let done = false;
-
-  while (!done) {
-    try {
-      const response = await fetch('http://localhost:2076/get_augmentation_progress');
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress');
-      }
-
-      const data = await response.json();
-      console.log("Progress data:", data);
-      setProgress(data);
-
-      if (data.progress >= 100) {
-        setIsProcessing(false);
-        setSnackbarOpen(true);
-        done = true;
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    } catch (err) {
-      console.error('Error checking progress:', err);
-      setIsProcessing(false);
-      done = true;
+  try {
+    const response = await fetch('http://localhost:2076/get_augmentation_progress');
+    if (!response.ok) {
+      throw new Error('Failed to fetch progress');
     }
+
+    const data = await response.json();
+    console.log("Progress data:", data);
+    setProgress(data);
+
+    if (data.total > 0 && data.current >= data.total) {
+      setIsProcessing(false);
+      setSnackbarOpen(true);
+      return;
+    }
+
+    progressIntervalRef.current = setTimeout(checkProgress, 500);
+  } catch (err) {
+    console.error('Error during progress polling:', err);
+    setError('Error checking progress');
+    setIsProcessing(false);
   }
 };
 
 
-  const startAugmentation = async () => {
-    setIsProcessing(true);
-    setError(null);
 
-    setProgress({
-      current: 0,
-      total: 0,
-      progress: 0,
-      status: 'Starting...'
-    });
+  const startAugmentation = () => {
+  setError(null);
+  setIsProcessing(true);
 
-    try {
-      const response = await fetch('http://localhost:2076/start_augmentation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(augmentation),
-      });
+  setProgress({
+    current: 0,
+    total: 0,
+    progress: 0,
+    status: 'Starting...',
+  });
 
+  checkProgress();
+
+  fetch('http://localhost:2076/start_augmentation', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(augmentation),
+  })
+    .then((response) => {
       if (!response.ok) {
         throw new Error('Failed to start augmentation');
-      } 
-      checkProgress();
-      const data = await response.json();
-      console.log("Calling checkProgress...");
-      setSnackbarOpen(true);
-    } catch (err) {
+      }
+      return response.json();
+    })
+    .then((data) => {
+      console.log("Augmentation finished:", data);
+    })
+    .catch((err) => {
+      console.error('Error starting augmentation:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } //finally {
-    //   setIsProcessing(false);
-    // }
-  };
+      setIsProcessing(false);
+    });
+};
+
+
+
 
 return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>

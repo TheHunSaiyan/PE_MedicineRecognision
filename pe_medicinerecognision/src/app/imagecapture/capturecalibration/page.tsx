@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
-import { Typography } from '@mui/material';
+import { Typography, FormControlLabel, Radio } from '@mui/material';
+
+interface LedParameters{
+  upper_led: number;
+  side_led: number;
+}
 
 const CameraApp: React.FC = () => {
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -18,6 +23,11 @@ const CameraApp: React.FC = () => {
   const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null);
   const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
   const [showLastImage, setShowLastImage] = useState(false);
+  const [selectedLamp, setSelectedLamp] = useState<'upper_led' | 'side_led' | 'none'>('none');
+  const [Parameters, setParameters] = useState<LedParameters>({
+    upper_led: 0,
+    side_led: 0
+  })
 
 const handleHoldStart = () => {
     setShowLastImage(true);
@@ -26,6 +36,35 @@ const handleHoldStart = () => {
   const handleHoldEnd = () => {
     setShowLastImage(false);
   };
+
+  useEffect(() => {
+        setIsMounted(true);
+        const fetchSettings = async () => {
+        try {
+          const response = await fetch('http://localhost:2076/led_settings');
+          if (!response.ok) {
+            throw new Error('Failed to fetch led settings');
+          }
+          const data = await response.json();
+          console.log("Received data:", data); 
+          setParameters(data);
+        } catch (error) {
+          console.error('Error fetching settings:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+        fetchSettings();
+        return () => setIsMounted(false);
+      }, []);
+
+  const debounce = (func: (...args: any[]) => void, delay: number) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
 
 
 const formatTimestamp = (date: Date): string => {
@@ -99,6 +138,35 @@ const formatTimestamp = (date: Date): string => {
   const toggleLiveFeed = () => {
     setIsLiveFeedActive(!isLiveFeedActive);
   };
+
+  const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const lamp = event.target.value as 'upper_led' | 'side_led' | 'none';
+    setSelectedLamp(lamp);
+
+    const params: LedParameters = {
+    upper_led: lamp === 'upper_led' ? Parameters.upper_led : 0,
+    side_led: lamp === 'side_led' ? Parameters.side_led : 0
+  };
+
+    sendLedUpdate(params);
+  };
+
+  const sendLedUpdate = debounce(async (params: LedParameters) => {
+  try {
+    const response = await fetch('http://localhost:2076/led_control', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+     if (!response.ok) {
+      throw new Error('Failed to update LED settings');
+    }
+  } catch (error) {
+    console.error('Error updating LED settings:', error);
+  }
+}, 2000);
 
   return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh'}}>
@@ -216,6 +284,42 @@ const formatTimestamp = (date: Date): string => {
             </div>
           )}
         </div>
+      </div>
+      <br></br>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <FormControlLabel
+          control={
+            <Radio
+              checked={selectedLamp === 'upper_led'}
+              onChange={handleLampChange}
+              value="upper_led"
+              name="lamp-selection"
+            />
+          }
+          label="Upper Lamp"
+        />
+        <FormControlLabel
+          control={
+            <Radio
+              checked={selectedLamp === 'side_led'}
+              onChange={handleLampChange}
+              value="side_led"
+              name="lamp-selection"
+            />
+          }
+          label="Side Lamp"
+        />
+        <FormControlLabel
+          control={
+            <Radio
+              checked={selectedLamp === 'none'}
+              onChange={handleLampChange}
+              value="none"
+              name="lamp-selection"
+            />
+          }
+          label="None"
+        />
       </div>
       <br></br>
        <Link href="/imagecapture" passHref>

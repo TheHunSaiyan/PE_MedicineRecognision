@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import Select from 'react-select'
-import Snackbar from '@mui/material/Snackbar';
+import {Snackbar, FormControlLabel, Radio} from '@mui/material';
 import Alert from '@mui/material/Alert';
 
 interface Medication {
@@ -15,6 +15,11 @@ interface Medication {
 interface SelectOption {
   value: string;
   label: string;
+}
+
+interface LedParameters{
+  upper_led: number;
+  side_led: number;
 }
 
 const CameraApp: React.FC = () => {
@@ -34,6 +39,10 @@ const [imageUrl, setImageUrl] = useState<string>('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 const [snackbarMessage, setSnackbarMessage] = useState('');
 const [snackbarSeverity, setSnackbarSeverity] = useState<'error' | 'warning' | 'info' | 'success'>('error');
+const [Parameters, setParameters] = useState<LedParameters>({
+    upper_led: 0,
+    side_led: 0
+  })
 
 const showMessage = (message: string, severity: 'error' | 'warning' | 'info' | 'success' = 'error') => {
   setSnackbarMessage(message);
@@ -69,6 +78,27 @@ const showMessage = (message: string, severity: 'error' | 'warning' | 'info' | '
 
     return () => setIsMounted(false);
   }, []);
+
+   useEffect(() => {
+          setIsMounted(true);
+          const fetchSettings = async () => {
+          try {
+            const response = await fetch('http://localhost:2076/led_settings');
+            if (!response.ok) {
+              throw new Error('Failed to fetch led settings');
+            }
+            const data = await response.json();
+            console.log("Received data:", data); 
+            setParameters(data);
+          } catch (error) {
+            console.error('Error fetching settings:', error);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+          fetchSettings();
+          return () => setIsMounted(false);
+        }, []);
 
 const formatMedicationName = (name: string): string => {
   return name
@@ -150,13 +180,47 @@ const formatMedicationName = (name: string): string => {
   setIsLiveFeedActive(!isLiveFeedActive);
 };
 
-  const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSelectedLamp(event.target.value);
+    const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const lamp = event.target.value as 'upper_led' | 'side_led' | 'none';
+      setSelectedLamp(lamp);
+  
+      const params: LedParameters = {
+      upper_led: lamp === 'upper_led' ? Parameters.upper_led : 0,
+      side_led: lamp === 'side_led' ? Parameters.side_led : 0
+    };
+  
+      sendLedUpdate(params);
     };
 
   const handlePillSideChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       setSelectedPillSide(event.target.value);
     };
+
+ const debounce = (func: (...args: any[]) => void, delay: number) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
+
+  const sendLedUpdate = debounce(async (params: LedParameters) => {
+  try {
+    const response = await fetch('http://localhost:2076/led_control', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+     if (!response.ok) {
+      throw new Error('Failed to update LED settings');
+    }
+  } catch (error) {
+    console.error('Error updating LED settings:', error);
+  }
+}, 2000);
 
   return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh' }}>
@@ -194,52 +258,56 @@ const formatMedicationName = (name: string): string => {
           variant="contained"
           color={isLiveFeedActive ? 'secondary' : 'primary'}
           onClick={toggleLiveFeed}
+          style={{ marginRight: '20px' }}
         >
           {isLiveFeedActive ? 'Stop Live Feed' : 'Start Live Feed'}
         </Button>
-
-        <label style={{ marginLeft: '20px', marginRight: '10px' }}>
-          <input
-            type="radio"
-            name="lampSelection"
-            value="upperLamp"
-            checked={selectedLamp === 'upperLamp'}
-            onChange={handleLampChange}
-          />
-          Upper Lamp
-        </label>
-
-        <label style={{ marginRight: '10px' }}>
-          <input
-            type="radio"
-            name="lampSelection"
-            value="sideLamp"
-            checked={selectedLamp === 'sideLamp'}
-            onChange={handleLampChange}
-          />
-          Side Lamp
-        </label>
-        <label style={{ marginRight: '10px', marginLeft: '20px' }}>
-          <input
-            type="radio"
-            name="pillSideSelection"
-            value="topSide"
-            checked={selectedPillSide=== 'topSide'}
-            onChange={handlePillSideChange}
-          />
-          Top Side
-        </label>
-
-        <label style={{ marginRight: '10px' }}>
-          <input
-            type="radio"
-            name="pillSideSelection"
-            value="bottomSide"
-            checked={selectedPillSide === 'bottomSide'}
-            onChange={handlePillSideChange}
-          />
-          Bottom Side
-        </label>
+       <FormControlLabel
+                 control={
+                   <Radio
+                     checked={selectedLamp === 'upper_led'}
+                     onChange={handleLampChange}
+                     value="upper_led"
+                     name="lamp-selection"
+                   />
+                 }
+                 label="Upper Lamp"
+               />
+               <FormControlLabel
+                 control={
+                   <Radio
+                     checked={selectedLamp === 'side_led'}
+                     onChange={handleLampChange}
+                     value="side_led"
+                     name="lamp-selection"
+                   />
+                 }
+                 label="Side Lamp"
+               />
+                  <FormControlLabel
+              control={
+                <Radio
+                  checked={selectedPillSide === 'topSide'}
+                  onChange={handlePillSideChange}
+                  value="topSide"
+                  name="pillSideSelection"
+                />
+              }
+              label="Top Side"
+              style={{ marginRight: '10px', marginLeft: '20px' }}
+            />
+            <FormControlLabel
+              control={
+                <Radio
+                  checked={selectedPillSide === 'bottomSide'}
+                  onChange={handlePillSideChange}
+                  value="bottomSide"
+                  name="pillSideSelection"
+                />
+              }
+              label="Bottom Side"
+              style={{ marginRight: '10px' }}
+            />
       
       {error && <div className="error-message">{error}</div>}
       

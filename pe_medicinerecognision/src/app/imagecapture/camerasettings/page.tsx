@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Button, Input, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider} from '@mui/material';
+import { Button, Input, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider, Radio} from '@mui/material';
 import Link from 'next/link';
 
 interface CameraParameters {
@@ -15,6 +15,16 @@ interface CameraParameters {
   exposure_time_absolute: number;
   exposure_dynamic_framerate: boolean;
 }
+
+interface LedParameters {
+  upper_led: number;
+  side_led: number;
+}
+
+const defaultLedParameters: LedParameters = {
+  upper_led: 50,
+  side_led: 50
+};
 
 const defaultParameters: CameraParameters = {
   brightness: 0,
@@ -34,8 +44,9 @@ const CameraSettingsForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
   const [isMounted, setIsMounted] = useState(false);
-  const [intensity, setIntensity] = useState<number>(50);
-  const [selectedLamp, setSelectedLamp] = useState('upperLamp');
+ const [ledParams, setLedParams] = useState<LedParameters>(defaultLedParameters);
+const [ledIntensity, setLedIntensity] = useState<number>(defaultLedParameters.upper_led);
+const [selectedLamp, setSelectedLamp] = useState<'upper_led' | 'side_led'>('upper_led');
   
     useEffect(() => {
       setIsMounted(true);
@@ -266,13 +277,41 @@ const handleSave = () => {
   }
 };
 
-const handleIntensityChange = (event: Event, newValue: number | number[]) => {
-  setIntensity(newValue as number);
+const handleLedIntensityChange = (event: Event, newValue: number | number[]) => {
+  const value = newValue as number;
+  setLedIntensity(value);
+  
+  const updatedLedParams = {
+    ...ledParams,
+    [selectedLamp]: value
+  };
+  
+  setLedParams(updatedLedParams);
+  sendLedUpdate(updatedLedParams);
 };
 
 const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedLamp(event.target.value);
-  };
+  const lamp = event.target.value as 'upper_led' | 'side_led';
+  setSelectedLamp(lamp);
+  setLedIntensity(ledParams[lamp]);
+};
+
+const sendLedUpdate = debounce(async (params: LedParameters) => {
+  try {
+    const response = await fetch('http://localhost:2076/led_control', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+     if (!response.ok) {
+      throw new Error('Failed to update LED settings');
+    }
+  } catch (error) {
+    console.error('Error updating LED settings:', error);
+  }
+}, 2000);
 
   const handleBlur = (name: keyof CameraParameters, min: number, max: number) => (event: React.FocusEvent<HTMLInputElement>) => {
   const value = Number(event.target.value);
@@ -529,60 +568,69 @@ const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
           padding: '10px',
         }}>
         <div>
-      <div className="radio">
-        <label>
-          <input
-            type="radio"
-            name="lampSelection"
-            value="upperLamp"
-            checked={selectedLamp === 'upperLamp'}
-            onChange={handleLampChange}
-          />
-          Upper Lamp
-        </label>
-      </div>
-      <div className="radio">
-        <label>
-          <input
-            type="radio"
-            name="lampSelection"
-            value="sideLamp"
-            checked={selectedLamp === 'sideLamp'}
-            onChange={handleLampChange}
-          />
-          Side Lamp
-        </label>
-      </div>
+           <div>
+            <FormControlLabel
+              control={
+                <Radio
+                  checked={selectedLamp === 'upper_led'}
+                  onChange={handleLampChange}
+                  value="upper_led"
+                  name="lamp-selection"
+                />
+              }
+              label="Upper Lamp"
+            />
+            <FormControlLabel
+              control={
+                <Radio
+                  checked={selectedLamp === 'side_led'}
+                  onChange={handleLampChange}
+                  value="side_led"
+                  name="lamp-selection"
+                />
+              }
+              label="Side Lamp"
+            />
+          </div>
     </div>
 
-        <Typography id="exposure-time-slider" gutterBottom>Light Intensity</Typography>
-        <div style={{ display: 'flex' }}>
-                    <Slider
-                      value={intensity}
-                      onChange={handleIntensityChange}
-                      aria-labelledby="intensity-slider"
-                      min={30}
-                      max={180}
-                      step={1}
-                      valueLabelDisplay="auto"
-                    />
-                    <Input
-      value={intensity}
-      size="small"
-      //onChange={handleIntensityChange}
-      //onBlur={handleBlur('exposure_time_absolute', 1, 5000)}
-      inputProps={{
-        step: 1,
-        min: 30,
-        max: 180,
-        type: 'number',
-        'aria-labelledby': 'intensity-slider',
-      }}
-      sx={{ width: '80px' }}
-
-      style={{ marginLeft: '20px' }}
-    />
-    </div>
+        <Typography id="led-slider" gutterBottom>
+          {selectedLamp === 'upper_led' ? 'Upper' : 'Side'} Lamp Intensity
+        </Typography>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <Slider
+            value={ledIntensity}
+            onChange={handleLedIntensityChange}
+            aria-labelledby="led-slider"
+            min={30}
+            max={180}
+            step={1}
+            valueLabelDisplay="auto"
+            sx={{ flex: 1 }}
+          />
+          <Input
+            value={ledIntensity}
+            size="small"
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (!isNaN(value)) {
+                handleLedIntensityChange(e as any, value);
+              }
+            }}
+            onBlur={(e) => {
+              const value = Number(e.target.value);
+              const clampedValue = Math.min(100, Math.max(0, isNaN(value) ? ledIntensity : value));
+              handleLedIntensityChange(e as any, clampedValue);
+            }}
+            inputProps={{
+              step: 1,
+              min: 0,
+              max: 100,
+              type: 'number',
+            }}
+            sx={{ width: '80px' }}
+          />
+        </div>
         </div>
         </div>
         <div style={{ 
