@@ -21,6 +21,6 @@ RUN pip3 install pyserial
 
 COPY . .
 
-RUN mkdir -p /app/CapturedImages /app/CalibrationImages /app/UndistortedImages
+RUN mkdir -p /app/Data/CapturedImages /app/Data/CalibrationImages /app/Data/UndistortedImages
 
 CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "2076"]

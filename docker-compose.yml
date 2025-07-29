@@ -7,11 +7,14 @@ services:
       - "2076:2076"
     volumes:
       - .:/app
-      - ./CapturedImages:/app/CapturedImages
-      - ./CalibrationImages:/app/CalibrationImages
-      - ./UndistortedImages:/app/UndistortedImages
-      - ./camera_calibration_params:/app/camera_calibration_params
-      - ./SplitDataset:/app/SplitDataset
+      - ./Data/CapturedImages:/app/CapturedImages
+      - ./Data/CalibrationImages:/app/CalibrationImages
+      - ./Data/UndistortedImages:/app/UndistortedImages
+      - ./Data/SplitDataset:/app/SplitDataset
+      - ./Config:/app/Config
+      - ./Controllers:/app/Controllers
+      - ./Manager:/app/Manager
+      - ./Models:/app/Models
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true
@@ -25,7 +28,7 @@ services:
     ports:
       - "2077:2077"
     volumes:
-      - ./pe_medicinerecognision:/app
+      - ./Frontend:/app
       - /app/node_modules
     environment:
        - NODE_ENV=development
