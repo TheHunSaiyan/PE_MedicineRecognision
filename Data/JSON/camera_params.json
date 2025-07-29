@@ -1,0 +1,11 @@
+{
+    "brightness": -44,
+    "contrast": 20,
+    "saturation": 83,
+    "white_balance_automatic": false,
+    "white_balance_temperature": 4600,
+    "sharpness": 2,
+    "auto_exposure": 1,
+    "exposure_time_absolute": 2001,
+    "exposure_dynamic_framerate": false
+}
