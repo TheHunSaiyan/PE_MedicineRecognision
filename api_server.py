@@ -16,18 +16,21 @@ from pathlib import Path
 import threading
 import concurrent.futures
 
-from camera_controller import CameraController
-from calibration_manager import CalibrationManager
-from led_controller import LEDController
-from models import CameraParameters, CameraCalibrationParameters, LEDParameters
-from config import AppConfig
+from Controllers.camera_controller import CameraController
+from Manager.calibration_manager import CalibrationManager
+from Controllers.led_controller import LEDController
+from Models.led_parameters import LEDParameters
+from Models.camera_parameters import CameraParameters
+from Models.camera_calibration_parameters import CameraCalibrationParameters
+from Config.config import AppConfig
 
-from CameraSettings.camera_settings import CameraSettings
-from CalibrationSettings.calibration_settings import CalibrationSettings
-from CapturePill.capture_pill import CapturePill
-from logger import logger
-from SplitDataset.splitdataset import SplitDataset
-from AugmentImage.augment_image import AugmentImage
+from ImageCapture.CameraSettings.camera_settings import CameraSettings
+from ImageCapture.CalibrationSettings.calibration_settings import CalibrationSettings
+from ImageCapture.CapturePill.capture_pill import CapturePill
+from Logger.logger import logger
+from DataPreparation.SplitDataset.splitdataset import SplitDataset
+from DataPreparation.AugmentImage.augment_image import AugmentImage
+from DataPreparation.StreamImage.stream_image import StreamImage
 
 class APIServer:
     def __init__(self):
@@ -38,12 +41,12 @@ class APIServer:
         self.lock = threading.Lock()
         self.setup_middleware()
         self.setup_routes()
-        AppConfig.ensure_directories_exist()
         self.camera_settings = CameraSettings(self.camera, self.led)
         self.calibration_settings = CalibrationSettings(self.calibration_manager)
         self.capture_pill = CapturePill(self.camera)
         self.splitdataset = SplitDataset()
         self.augment_image = AugmentImage()
+        self.stream_image = StreamImage()
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -135,22 +138,41 @@ class APIServer:
         async def capture_with_metadata(data: Dict[str, Any]):
             return await self.capture_pill.capture_with_metadata(data)
         
-        @self.app.get("/data_availability")
+        @self.app.get("/data_availability_for_split")
         async def get_data_availability():
             return await self.splitdataset.get_data_availability()
         
         @self.app.post("/start_split")
         async def start_split(data: Dict[str, Any]):
-            return await self.splitdataset.start_split(data)
+            return await run_in_threadpool(self.splitdataset.start_split, data)
+        
+        @self.app.get("/get_split_progress")
+        async def get_split_progress():
+            return await self.splitdataset.get_progress()
+        
+        @self.app.get("/data_availability_for_augmentation")
+        async def get_data_availability():
+            return await self.augment_image.get_data_availability()
         
         @self.app.post("/start_augmentation")
         async def start_augmentation(data: Dict[str, Any]):
             return await run_in_threadpool(self.augment_image.start_augmentation, data)
 
-        
         @self.app.get("/get_augmentation_progress")
         async def get_au_progress():
             return await self.augment_image.get_progress()
+        
+        @self.app.get("/data_availability_for_stream_images")
+        async def get_data_availability():
+            return await self.stream_image.get_data_availability()
+        
+        @self.app.post("/start_stream_images")
+        async def start_stream_images(data: Dict[str, Any]):
+            return await run_in_threadpool(self.stream_image.start_stream_images, data)
+        
+        @self.app.get("/get_stream_image_progress")
+        async def get_stream_image_progress():
+            return await self.stream_image.get_progress()
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn
