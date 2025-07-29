@@ -57,38 +57,35 @@ const [availability, setAvailability] = useState<DataAvailability>({
     }, []);
 
     const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-          const lamp = event.target.value as 'Consumer' | 'Reference';
-          setSelectedMode(lamp);
-        };
+      setSelectedMode(event.target.value);
+    };
 
     const startSplit = async () => {
     if (selectedMode === '') {
-      setError(`You must choose a mode!`);
-      return;
+        setError(`You must choose a mode!`);
+        return;
     }
 
     setIsProcessing(true);
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:2076/start_stream_images', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(selectedMode)
-      });
+        const response = await fetch('http://localhost:2076/start_stream_images', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ mode: selectedMode })
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to start dataset split');
-      }
-      
+        if (!response.ok) {
+            throw new Error('Failed to start stream image creation');
+        }
+        
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsProcessing(false);
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
-  };
+};
 
    useEffect(() => {
       let intervalId: NodeJS.Timeout;
@@ -190,15 +187,18 @@ const [availability, setAvailability] = useState<DataAvailability>({
               >
                 {isProcessing ? 'Processing...' : 'Start'}
               </Button>
+              <div>
+                <br></br>
+              </div>
               <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
                   {progress > 0 && progress < 100 && (
                     <Typography variant="body2" style={{ marginTop: '10px' }}>
-                      Splitting dataset... {progress}% ({progressInfo.processed}/{progressInfo.total} files)
+                      Creating Stream images... {progress}% ({progressInfo.processed}/{progressInfo.total} files)
                     </Typography>
                   )}
                   {progress === 100 && (
                     <Typography variant="body2" style={{ marginTop: '10px' }}>
-                      Dataset split completed successfully! ({progressInfo.total} files processed)
+                      Stream Images created successfully! ({progressInfo.total} files processed)
                     </Typography>
                   )}
           </div>

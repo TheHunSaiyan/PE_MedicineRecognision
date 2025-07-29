@@ -17,6 +17,8 @@ RUN pip3 install python-multipart
 RUN pip3 install pillow
 RUN pip3 install qrcode pillow
 RUN pip3 install pyserial
+RUN pip3 install scikit-image
+RUN pip3 install tqdm
 
 
 COPY . .
