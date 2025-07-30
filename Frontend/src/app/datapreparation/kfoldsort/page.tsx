@@ -18,6 +18,25 @@ const [progress, setProgress] = useState(0);
       total: 0
     });
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isProcessing) {
+      interval = setInterval(async () => {
+        const response = await fetch('http://localhost:2076/get_sort_process');
+        const data = await response.json();
+        setProgress(data.progress);
+        setProgressInfo(data);
+        if (data.progress >= 100) {
+          setIsProcessing(false);
+          clearInterval(interval);
+        }
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
+  }, [isProcessing]);
+
 const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       setfoldMode(event.target.value);
     };
@@ -38,30 +57,38 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const startSorting = async () => {
     if (foldMode === '') {
-        setError(`You must choose a fold mode!`);
-        return;
+      setError(`You must choose a fold mode!`);
+      return;
     }
 
     setIsProcessing(true);
     setError(null);
+    setProgress(0);
+    setProgressInfo({ progress: 0, processed: 0, total: 0 });
 
     try {
-        const response = await fetch('http://localhost:2076/start_stream_images', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ mode: foldMode })
-        });
+      const response = await fetch('http://localhost:2076/start_sort', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mode: foldMode,
+          num_folds: foldNumber,
+          selected_fold: selectedFold,
+          erase: erase
+        })
+      });
 
-        if (!response.ok) {
-            throw new Error('Failed to start stream image creation');
-        }
-        
+      if (!response.ok) {
+        throw new Error('Failed to start sorting process');
+      }
     } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      setIsProcessing(false);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
-};
+  };
+
 
     return (
     <div className="camera-container" style={{
@@ -147,17 +174,23 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
               <div>
                 <br></br>
               </div>
-              <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
-                  {progress > 0 && progress < 100 && (
-                    <Typography variant="body2" style={{ marginTop: '10px' }}>
-                      Creating Stream images... {progress}% ({progressInfo.processed}/{progressInfo.total} files)
-                    </Typography>
-                  )}
-                  {progress === 100 && (
-                    <Typography variant="body2" style={{ marginTop: '10px' }}>
-                      Stream Images created successfully! ({progressInfo.total} files processed)
-                    </Typography>
-                  )}
+             {error && (
+            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+              {error}
+            </Typography>
+          )}
+
+          <LinearProgress variant="determinate" value={progress} sx={{ mt: 2 }} />
+          {progress > 0 && progress < 100 && (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Sorting images... {progress}% ({progressInfo.processed}/{progressInfo.total})
+            </Typography>
+          )}
+          {progress === 100 && (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Images sorted successfully! ({progressInfo.total} files processed)
+            </Typography>
+          )}
     </Paper>
       </div>
       <div style={{

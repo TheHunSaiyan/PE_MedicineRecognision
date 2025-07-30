@@ -6,6 +6,7 @@ import random
 import shutil
 import qrcode
 
+from fastapi import HTTPException, status
 from PIL import Image
 from typing import Dict, Any, Optional
 
@@ -45,7 +46,11 @@ class AugmentImage:
                     try:
                         os.remove(file_path)
                     except Exception as e:
-                        print(f"Failed to delete {file_path}: {e}")
+                        logger.error(f"Failed to delete {file_path}: {e}")
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Failed to delete {file_path}: {e}"
+                        )
             else:
                 os.makedirs(path, exist_ok=True)
 
@@ -184,7 +189,13 @@ class AugmentImage:
         progress = 0
         if self._total_files > 0:
             progress = (self._processed_files / self._total_files) * 100
-        
+            
+        logger.info({
+            "current": self._processed_files,
+            "total": self._total_files,
+            "progress": progress,
+            "status": "Processing" if progress < 100 else "Completed"
+        })
         return {
             "current": self._processed_files,
             "total": self._total_files,
@@ -193,40 +204,52 @@ class AugmentImage:
         }
 
     def start_augmentation(self, data):
-        self.clear_output_directories()
-        self._processed_files = 0
-        self._total_files = 0
-        
-        for img_file, mask_file, ann_file in self.get_image_triplets():
-            base_name = os.path.splitext(os.path.basename(img_file))[0]
-            image = cv2.imread(img_file)
-            mask = cv2.imread(mask_file)
-    
-            if image is None or mask is None:
-                continue
-    
-            if data.get("white_balance"):
-                image = self.apply_white_balance(image)
-            if data.get("blur"):
-                image = self.apply_blur(image)
-            if data.get("brightness"):
-                image = self.apply_brightness(image)
-            if data.get("rotate"):
-                image, mask = self.apply_rotation(image, mask)
-            if data.get("shift"):
-                image, mask = self.apply_shift(image, mask)
-            if data.get("zoom"):
-                image, mask = self.apply_zoom(image, mask)
-            if data.get("change_background"):
-                image = self.apply_background_change(image, mask)
-            if data.get("qr_code"):
-               image = self.qr_code(image)
-    
-            self.save_data(image, mask, method="combined", txt_op="copy", txt_file=ann_file, base_name=base_name)
-            self._processed_files += 1
+        try:
+            logger.info("Augmentation started...")
+            self.clear_output_directories()
+            self._processed_files = 0
+            self._total_files = 0
             
-        logger.info("Successfull augmentation.")
-        return {
-            "status": "success"
-        }
+            for img_file, mask_file, ann_file in self.get_image_triplets():
+                base_name = os.path.splitext(os.path.basename(img_file))[0]
+                image = cv2.imread(img_file)
+                mask = cv2.imread(mask_file)
+        
+                if image is None or mask is None:
+                    continue
+        
+                if data.get("white_balance"):
+                    image = self.apply_white_balance(image)
+                if data.get("blur"):
+                    image = self.apply_blur(image)
+                if data.get("brightness"):
+                    image = self.apply_brightness(image)
+                if data.get("rotate"):
+                    image, mask = self.apply_rotation(image, mask)
+                if data.get("shift"):
+                    image, mask = self.apply_shift(image, mask)
+                if data.get("zoom"):
+                    image, mask = self.apply_zoom(image, mask)
+                if data.get("change_background"):
+                    image = self.apply_background_change(image, mask)
+                if data.get("qr_code"):
+                    image = self.qr_code(image)
+        
+                self.save_data(image, mask, method="combined", txt_op="copy", txt_file=ann_file, base_name=base_name)
+                self._processed_files += 1
+                
+            logger.info("Successfull augmentation.")
+            return {
+                "status": "success"
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e)
+            )
+        
+        
 

@@ -4,6 +4,7 @@ import time
 
 from typing import Optional
 from Config.config import AppConfig
+from Logger.logger import logger
 from Models.camera_parameters import CameraParameters
 
 class CameraController:
@@ -22,20 +23,24 @@ class CameraController:
             
         saved_config = CameraParameters.load_from_file()
         
-        self.camera = cv2.VideoCapture(self.video_source, cv2.CAP_V4L2)
-        if not self.camera.isOpened():
-            raise RuntimeError(f"Failed to open {self.video_source}")
-            
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         
-        if saved_config:
-            self.apply_parameters(saved_config)
+        try:
+            self.camera = cv2.VideoCapture(self.video_source, cv2.CAP_V4L2)
+            if not self.camera.isOpened():
+                raise RuntimeError(f"Failed to open {self.video_source}")
+                
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
-        self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self.thread.start()
-        
+            if saved_config:
+                self.apply_parameters(saved_config)
+                
+            self.running = True
+            self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+            self.thread.start()
+        except Exception as e:
+            logger.error(f"Camera initialization error: {e}")
+            
     def stop_capture(self):
         self.running = False
         if self.thread:
@@ -45,19 +50,27 @@ class CameraController:
             
     def _capture_loop(self):
         while self.running:
-            ret, frame = self.camera.read()
-            if not ret:
-                time.sleep(0.1)
-                continue
+            try:
+                ret, frame = self.camera.read()
+                if not ret:
+                    time.sleep(0.1)
+                    continue
+                    
+                with self.lock:
+                    self.latest_frame = frame
+                    
+                time.sleep(0.05)
+            except Exception as e:
+                logger.error(f"Error in capture loop: {e}")
+                break
                 
-            with self.lock:
-                self.latest_frame = frame
-                
-            time.sleep(0.05)
-            
     def get_frame(self):
         with self.lock:
-            return self.latest_frame.copy() if self.latest_frame is not None else None
+            try:
+                return self.latest_frame.copy()
+            except Exception as e:
+                logger.error(f"Error copying frame: {e}")
+                return None
             
     def apply_parameters(self, params: CameraParameters):
         try:

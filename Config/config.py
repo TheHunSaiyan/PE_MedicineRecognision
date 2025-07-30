@@ -39,3 +39,8 @@ class AppConfig:
     REFERENCE_RGB = "Data/Reference/stream_images/rgb"
     REFERENCE_TEXTURE = "Data/Reference/stream_images/texture"
     STREAM_BG_CHANGED = "Data/Background_changed"
+    K_FOLD = "Data/KFold"
+    DATA_LIST_JSON = "Data/JSON/PTE_PE_pills.json"
+    K_FOLD_TRAIN = "Data/Train"
+    K_FOLD_TEST = "Data/Test"
+    

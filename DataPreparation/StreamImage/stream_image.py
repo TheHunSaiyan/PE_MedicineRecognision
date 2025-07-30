@@ -3,11 +3,13 @@ import concurrent.futures
 import numpy as np
 import os
 
+from fastapi import HTTPException, status
 from skimage.feature import local_binary_pattern
 from tqdm import tqdm
 from typing import Dict, List, Tuple
 
 from Config.config import AppConfig
+from Logger.logger import logger
 
 class StreamImage():
     def __init__(self):
@@ -21,8 +23,18 @@ class StreamImage():
         return {
             "images": os.path.exists(AppConfig.DATASET_IMAGES) and bool(os.listdir(AppConfig.DATASET_IMAGES)),
             "mask_images": os.path.exists(AppConfig.DATASET_MASKS) and bool(os.listdir(AppConfig.DATASET_MASKS)),
-            "split": True,
-            "background_changed": True
+            "split": (
+                    os.path.exists(AppConfig.CONSUMER_IMAGES) and 
+                    os.path.exists(AppConfig.REFERENCE_IMAGES) and
+                    bool(os.listdir(AppConfig.CONSUMER_IMAGES)) and 
+                    bool(os.listdir(AppConfig.REFERENCE_IMAGES))
+                ),
+            "background_changed": (
+                                os.path.exists(AppConfig.CONSUMER_IMAGES_WO_BG) and 
+                                os.path.exists(AppConfig.REFERENCE_IMAGES_WO_BG) and
+                                bool(os.listdir(AppConfig.CONSUMER_IMAGES_WO_BG)) and 
+                                bool(os.listdir(AppConfig.REFERENCE_IMAGES_WO_BG))
+                            )
         }
         
     def path_selector(self, mode: str) -> dict:
@@ -47,15 +59,24 @@ class StreamImage():
                 "texture": AppConfig.REFERENCE_TEXTURE
             }
         else:
-            raise ValueError("Invalid operation mode")
+            self.is_processing = False
+            logger.error("Invalid operation mode.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Invalid operation mode."
+            )
         
     def load_files(self, dir1: str, dir2: str, ext1: str, ext2: str) -> Tuple[List[str], List[str]]:
         files1 = sorted([os.path.join(dir1, f) for f in os.listdir(dir1) if f.endswith(ext1)])
         files2 = sorted([os.path.join(dir2, f) for f in os.listdir(dir2) if f.endswith(ext2)])
         
         if len(files1) != len(files2):
-            raise ValueError("Number of images and masks don't match")
-            
+            self.is_processing = False
+            logger.error("Number of images and masks don't match.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Number of images and masks don't match."
+            )
         return files1, files2
     
     def draw_bounding_box(self, in_img: np.ndarray, seg_map: np.ndarray, output_path: str) -> None:
@@ -119,20 +140,32 @@ class StreamImage():
         try:
             cropped_image, output_path = args
             if cropped_image is None:
-                raise ValueError("Failed to read input image")
+                self.is_processing = False
+                logger.error("Failed to read input image.")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to read input image."
+                )
                 
             blurred_img = cv2.GaussianBlur(cropped_image, (7, 7), 0)
             edges = cv2.Canny(blurred_img, 10, 30)
             success = cv2.imwrite(output_path, edges)
             
             if not success:
-                raise ValueError(f"Failed to write image to {output_path}")
+                logger.error("Failed to write image to {output_path}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to write image to {output_path}"
+                )
                 
             self.processed += 1
             self.progress = int((self.processed / self.total) * 100)
         except Exception as e:
-            print(f"Error processing contour image: {str(e)}")
-            raise
+            logger.error("Error processing contour image: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error processing contour image: {str(e)}"
+            )
         
     def save_contour_images(self, rgb_path: str, contour_path: str) -> None:
         rgb_images = [os.path.join(rgb_path, f) 
@@ -199,6 +232,8 @@ class StreamImage():
             concurrent.futures.wait(futures)
         
     def start_stream_images(self, data: Dict[str, any]):
+        logger.info("Creating Stream Images")
+        
         if self.is_processing:
             return {"status": "error", "message": "Processing already in progress"}
         
@@ -229,12 +264,25 @@ class StreamImage():
                 "message": f"{self.selected_mode.capitalize()} stream images created successfully"
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            self.is_processing = False
+            logger.error(f"Error during stream image creation: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during stream image creation: {str(e)}"
+            )
         finally:
             self.is_processing = False
     
     async def get_progress(self):
+        logger.info({
+            "progress": self.progress,
+            "processed": self.processed,
+            "total": self.total,
+            "is_processing": self.is_processing
+        })
         return {
             "progress": self.progress,
             "processed": self.processed,

@@ -31,6 +31,7 @@ from Logger.logger import logger
 from DataPreparation.SplitDataset.splitdataset import SplitDataset
 from DataPreparation.AugmentImage.augment_image import AugmentImage
 from DataPreparation.StreamImage.stream_image import StreamImage
+from DataPreparation.KFoldSort.kfoldsort import KFoldSort
 
 class APIServer:
     def __init__(self):
@@ -47,6 +48,7 @@ class APIServer:
         self.splitdataset = SplitDataset()
         self.augment_image = AugmentImage()
         self.stream_image = StreamImage()
+        self.kfoldsort = KFoldSort()
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -173,6 +175,15 @@ class APIServer:
         @self.app.get("/get_stream_image_progress")
         async def get_stream_image_progress():
             return await self.stream_image.get_progress()
+        
+        @self.app.post("/start_sort")
+        async def start_sort(data: Dict[str, Any]):
+            threading.Thread(target=self.kfoldsort.start_sorting, args=(data,), daemon=True).start()
+            return {"message": "Sorting started"}
+        
+        @self.app.get("/get_sort_process")
+        async def get_sort_process():
+            return await self.kfoldsort.get_sort_progress()
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

@@ -16,6 +16,11 @@ class SplitDataset:
         self._processed_files = 0
     
     async def get_progress(self):
+        logger.info({
+            "progress": self._progress,
+            "processed": self._processed_files,
+            "total": self._total_files
+        })
         return {
             "progress": self._progress,
             "processed": self._processed_files,
@@ -30,6 +35,7 @@ class SplitDataset:
         }
         
     def start_split(self, data: Dict[str, any]):
+        logger.info("Spliting dataset started...")
         self._progress = 0
         self._processed_files = 0
         self._total_files = 0
@@ -109,6 +115,8 @@ class SplitDataset:
                 "segregated": segregated
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error during dataset split: {str(e)}")
             raise HTTPException(
