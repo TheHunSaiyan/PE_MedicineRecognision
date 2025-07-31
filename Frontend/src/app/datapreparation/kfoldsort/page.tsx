@@ -1,22 +1,31 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import {Button, Paper, FormControlLabel, Radio, TextField, FormControl, InputLabel, Select, MenuItem, Checkbox, LinearProgress, Typography} from '@mui/material';
+import {Button, Paper, FormControlLabel, Radio, TextField, FormControl, InputLabel, Select, MenuItem, Checkbox, LinearProgress, Typography, Snackbar} from '@mui/material';
 import Link from 'next/link';
+import MuiAlert, { AlertProps } from '@mui/material/Alert';
+
+const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
+  props,
+  ref,
+) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
 
 const CameraApp: React.FC = () => {
 const [foldMode, setfoldMode] = useState('');
-const[foldNumber, setfoldNumber] = useState(0);
+const[foldNumber, setfoldNumber] = useState(1);
 const [selectedFold, setSelectedFold] = useState('fold1');
 const [erase, setErase] = useState(false);
 const [isProcessing, setIsProcessing] = useState(false);
 const [error, setError] = useState<string | null>(null);
 const [progress, setProgress] = useState(0);
-  const [progressInfo, setProgressInfo] = useState({
-      progress: 0,
-      processed: 0,
-      total: 0
-    });
+const [progressInfo, setProgressInfo] = useState({
+    progress: 0,
+    processed: 0,
+    total: 0
+  });
+const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -29,6 +38,7 @@ const [progress, setProgress] = useState(0);
         setProgressInfo(data);
         if (data.progress >= 100) {
           setIsProcessing(false);
+          setSnackbarOpen(true)
           clearInterval(interval);
         }
       }, 1000);
@@ -42,7 +52,9 @@ const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     };
 
 const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newNumber = Number(event.target.value);
+    let newNumber = Number(event.target.value);
+    if (newNumber < 1) newNumber = 1;
+    if (newNumber > 10) newNumber = 10;
     setfoldNumber(newNumber);
     if (parseInt(selectedFold.replace('fold', '')) > newNumber) {
       setSelectedFold('fold1');
@@ -88,6 +100,13 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
   };
+
+  const handleSnackbarClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
+      if (reason === 'clickaway') {
+        return;
+      }
+      setSnackbarOpen(false);
+    };
 
 
     return (
@@ -142,9 +161,12 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
             onChange={handleNumberChange}
             inputProps={{ 
               min: 1,
+              max: 10,
               step: 1
             }}
             sx={{ mt: 2 }}
+            error={foldNumber < 1 || foldNumber > 10}
+            helperText={foldNumber < 1 || foldNumber > 10 ? "Must be between 1 and 10" : ""}
           />
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>Select Fold</InputLabel>
@@ -204,6 +226,16 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
           </Button>
         </Link>
         </div>
+        <Snackbar 
+          open={snackbarOpen} 
+          autoHideDuration={6000} 
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <AlertComponent onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
+            K-Fold sort successfully!
+          </AlertComponent>
+        </Snackbar>
     </div>
   );
 

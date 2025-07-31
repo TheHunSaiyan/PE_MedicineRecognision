@@ -1,11 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox } from '@mui/material';
+import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Snackbar } from '@mui/material';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import LinearProgress from '@mui/material/LinearProgress';
 import InputAdornment from '@mui/material/InputAdornment';
+import MuiAlert, { AlertProps } from '@mui/material/Alert';
+
+const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
+  props,
+  ref,
+) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
 
 interface DataAvailability {
   images: boolean;
@@ -27,7 +35,8 @@ const [availability, setAvailability] = useState<DataAvailability>({
     mask_images: false
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [splitError, setSplitError] = useState<string | null>(null);
   const [splitParams, setSplitParams] = useState<SplitParams>({
     train: 70,
     val: 20,
@@ -42,30 +51,40 @@ const [availability, setAvailability] = useState<DataAvailability>({
     processed: 0,
     total: 0
   });
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
-    const fetchDataAvailability = async () => {
-      try {
-        const response = await fetch('http://localhost:2076/data_availability_for_split');
-        if (!response.ok) {
-          throw new Error('Failed to fetch data availability');
-        }
-        const data = await response.json();
-        setAvailability({
-          images: data.images,
-          segmentation_labels: data.segmentation_labels,
-          mask_images: data.mask_images
-        });
-        setSuccess(true);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
+  if (progress === 100) {
+    setSnackbarOpen(true);
+    setIsComplete(false);
+  }
+}, [isComplete, progress]);
 
-    fetchDataAvailability();
-  }, []);
+  useEffect(() => {
+  const fetchDataAvailability = async () => {
+    try {
+      const response = await fetch('http://localhost:2076/data_availability_for_split');
+      if (!response.ok) {
+        throw new Error('Failed to fetch data availability');
+      }
+      const data = await response.json();
+      setAvailability({
+        images: data.images,
+        segmentation_labels: data.segmentation_labels,
+        mask_images: data.mask_images
+      });
+      setSuccess(true);
+      setAvailabilityError(null);
+    } catch (err) {
+      setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchDataAvailability();
+}, []);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -86,6 +105,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
             if (data.progress === 100) {
               clearInterval(intervalId);
               setIsProcessing(false);
+              setIsComplete(true);
             }
           }
         } catch (err) {
@@ -115,42 +135,78 @@ const [availability, setAvailability] = useState<DataAvailability>({
   };
 
   const startSplit = async () => {
-    const total = splitParams.train + splitParams.val + splitParams.test;
-    if (total !== 100) {
-      setError(`Split percentages must sum to 100% (current sum: ${total}%)`);
+  const total = splitParams.train + splitParams.val + splitParams.test;
+  if (total !== 100) {
+    setSplitError(`Split percentages must sum to 100% (current sum: ${total}%)`);
+    return;
+  }
+
+  if(splitParams.train == 0 || splitParams.val == 0 || splitParams.test == 0) {
+    setSplitError("Values can't be 0.");
+    return;
+  }
+
+  setIsProcessing(true);
+  setSplitError(null);
+  setProgress(0);
+  setIsComplete(false);
+  setSnackbarOpen(false);
+
+  try {
+    const response = await fetch('http://localhost:2076/start_split', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(splitParams)
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to start dataset split');
+    }
+    if(progressInfo.progress!=0){
+      setProgress(100);
+    }
+    
+  } catch (err) {
+    setSplitError(err instanceof Error ? err.message : 'An unknown error occurred');
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+const handleSnackbarClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
+    if (reason === 'clickaway') {
       return;
     }
-
-    if(splitParams.train == 0 || splitParams.val == 0 || splitParams.test == 0){
-        setError("Values can't be 0.")
-        return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-    setProgress(0);
-
-    try {
-      const response = await fetch('http://localhost:2076/start_split', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(splitParams)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start dataset split');
-      }
-      setProgress(100);
-      
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsProcessing(false);
-    }
+    setSnackbarOpen(false);
   };
 
+  const stopSplit = async () => {
+  try {
+    setSplitError(null);
+    const response = await fetch('http://localhost:2076/stop_split', {
+      method: 'POST',
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.message || 'Failed to stop dataset split');
+    }
+    
+    setProgress(0);
+    setIsProcessing(false);
+    setProgressInfo({
+      progress: 0,
+      processed: 0,
+      total: 0
+    });
+    
+  } catch (err) {
+    setSplitError(err instanceof Error ? err.message : 'An unknown error occurred');
+  }
+};
 
 return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
@@ -159,31 +215,105 @@ return (
         <br />
         {loading ? (
           <Typography>Loading availability status...</Typography>
-        ) : error && success ? (
-          <Alert severity="error">{error}</Alert>
+        ) : availabilityError && success ? (
+          <Alert severity="error">{availabilityError}</Alert>
         ) : (
           <>
             <FormControlLabel
-              control={<Checkbox checked={availability.images} disabled />}
-              label="Images"
+              control={
+                <Checkbox 
+                  checked={availability.images} 
+                  disabled
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+                />
+              }
+              label={
+                <span style={{
+                  color: availability.images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Images
+                </span>
+              }
+              sx={{
+                '& .MuiFormControlLabel-label': {
+                  color: availability.images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold',
+                }
+              }}
             />
-            <br></br>
+            <br />
             <FormControlLabel
-              control={<Checkbox checked={availability.segmentation_labels} disabled />}
-              label="Segmentation Labels"
+              control={
+                <Checkbox 
+                  checked={availability.segmentation_labels} 
+                  disabled
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.segmentation_labels ? '#04e762' : '#ef233c',
+                      fontSize: 28,
+                    },
+                  }}
+                />
+              }
+              label={
+                <span style={{
+                  color: availability.images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Segmentation Label
+                </span>
+              }
+              sx={{
+                '& .MuiFormControlLabel-label': {
+                  color: availability.segmentation_labels ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold',
+                }
+              }}
             />
-            <br></br>
+            <br />
             <FormControlLabel
-              control={<Checkbox checked={availability.mask_images} disabled />}
-              label="Masks"
+              control={
+                <Checkbox 
+                  checked={availability.mask_images} 
+                  disabled
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.mask_images ? '#04e762' : '#ef233c',
+                      fontSize: 28,
+                    },
+                  }}
+                />
+              }
+              label={
+                <span style={{
+                  color: availability.images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Masks
+                </span>
+              }
+              sx={{
+                '& .MuiFormControlLabel-label': {
+                  color: availability.mask_images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold',
+                }
+              }}
             />
           </>
         )}
       </div>
-         <div style={{ flex: '1 1 66%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+         <div style={{ flex: '1 1 33%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h1 style={{ fontSize: '40px', fontWeight: 'bold' }}>Split Dataset</h1>
             <br></br>
-            <FormControlLabel
+              <br></br>
+              <Paper elevation={3} style={{ padding: '20px', marginBottom: '20px' }}>
+                <FormControlLabel
           control={<Checkbox 
             checked={splitParams.segregated} 
             onChange={handleCheckboxChange}
@@ -191,10 +321,8 @@ return (
           />}
           label="Enable Segregated Split"
         />
-              <br></br>
-              <Paper elevation={3} style={{ padding: '20px', marginBottom: '20px' }}>
           <Typography variant="h6" gutterBottom>Split Ratios</Typography>
-          {error && <Alert severity="warning" style={{ marginBottom: '20px' }}>{error}</Alert>}
+          {splitError && <Alert severity="warning" style={{ marginBottom: '20px' }}>{splitError}</Alert>}
           <Box component="form" noValidate autoComplete="off">
             <TextField
               fullWidth
@@ -235,7 +363,7 @@ return (
                 endAdornment: <InputAdornment position="end">%</InputAdornment>,
               }}
             />
-            <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '20px', flexDirection: 'column' }}>
             <Button 
                 variant="contained" 
                 color="primary" 
@@ -245,6 +373,15 @@ return (
               >
                 {isProcessing ? 'Processing...' : 'Start'}
               </Button>
+              <Button 
+              variant="contained" 
+              color="error" 
+              onClick={stopSplit}
+              style={{ marginTop: '20px' }}
+              disabled={!isProcessing}
+            >
+              Stop
+            </Button>
             </Box>
           </Box>
             </Paper>
@@ -261,6 +398,7 @@ return (
       </Typography>
     )}
          </div>
+         <div style={{ flex: '1 1 33%' }}></div>
          <div style={{
         position: 'absolute',
         left: '20px',
@@ -272,6 +410,16 @@ return (
           </Button>
         </Link>
         </div>
+        <Snackbar 
+                open={snackbarOpen} 
+                autoHideDuration={6000} 
+                onClose={handleSnackbarClose}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+              >
+                <AlertComponent onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
+                  Split was successfull!
+                </AlertComponent>
+              </Snackbar>
     </div>
 );
 

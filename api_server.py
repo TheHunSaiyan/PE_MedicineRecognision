@@ -152,6 +152,10 @@ class APIServer:
         async def get_split_progress():
             return await self.splitdataset.get_progress()
         
+        @self.app.post("/stop_split")
+        async def stop_split():
+            return await self.splitdataset.stop_split()
+        
         @self.app.get("/data_availability_for_augmentation")
         async def get_data_availability():
             return await self.augment_image.get_data_availability()
@@ -163,6 +167,10 @@ class APIServer:
         @self.app.get("/get_augmentation_progress")
         async def get_au_progress():
             return await self.augment_image.get_progress()
+        
+        @self.app.post("/stop_augmentation")
+        async def stop_augmentation():
+            return await self.augment_image.stop_augmentation()
         
         @self.app.get("/data_availability_for_stream_images")
         async def get_data_availability():

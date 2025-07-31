@@ -53,7 +53,8 @@ const [availability, setAvailability] = useState<DataAvailability>({
     train_segmentation_labels: false
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [auError, setAuError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [augmentation, setAugmentation] = useState<Augmentation>({
     white_balance: false,
@@ -75,6 +76,8 @@ const [availability, setAvailability] = useState<DataAvailability>({
     status: 'Idle'
   });
  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+ const [isStopping, setIsStopping] = useState(false);
+ const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
     const fetchDataAvailability = async () => {
@@ -94,7 +97,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
         });
         setSuccess(true);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
       } finally {
         setLoading(false);
       }
@@ -126,69 +129,117 @@ const handleAugmentationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSnackbarOpen(false);
   };
 
- const checkProgress = async () => {
-  try {
-    const response = await fetch('http://localhost:2076/get_augmentation_progress');
-    if (!response.ok) {
-      throw new Error('Failed to fetch progress');
+ useEffect(() => {
+    const fetchProgress = async () => {
+      try {
+        const response = await fetch('http://localhost:2076/get_augmentation_progress');
+        if (!response.ok) {
+          throw new Error('Failed to fetch progress');
+        }
+
+        const data = await response.json();
+        console.log("Progress data:", data);
+        setProgress(data);
+
+        if (data.total > 0 && data.current >= data.total) {
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
+          setIsProcessing(false);
+          setIsComplete(true);
+          setSnackbarOpen(true);
+        }
+      } catch (err) {
+        console.error('Error during progress polling:', err);
+        setAuError('Error checking progress');
+        setIsProcessing(false);
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+      }
+    };
+
+    if (isProcessing) {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      
+      progressIntervalRef.current = setInterval(fetchProgress, 500);
+    } else {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     }
 
-    const data = await response.json();
-    console.log("Progress data:", data);
-    setProgress(data);
-
-    if (data.total > 0 && data.current >= data.total) {
-      setIsProcessing(false);
-      setSnackbarOpen(true);
-      return;
-    }
-
-    progressIntervalRef.current = setTimeout(checkProgress, 500);
-  } catch (err) {
-    console.error('Error during progress polling:', err);
-    setError('Error checking progress');
-    setIsProcessing(false);
-  }
-};
-
-
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [isProcessing]);
 
   const startAugmentation = () => {
-  setError(null);
-  setIsProcessing(true);
+    setAuError(null);
+    setIsProcessing(true);
+    setIsComplete(false);
+    setSnackbarOpen(false);
 
-  setProgress({
-    current: 0,
-    total: 0,
-    progress: 0,
-    status: 'Starting...',
-  });
-
-  checkProgress();
-
-  fetch('http://localhost:2076/start_augmentation', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(augmentation),
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error('Failed to start augmentation');
-      }
-      return response.json();
-    })
-    .then((data) => {
-      console.log("Augmentation finished:", data);
-    })
-    .catch((err) => {
-      console.error('Error starting augmentation:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      setIsProcessing(false);
+    setProgress({
+      current: 0,
+      total: 0,
+      progress: 0,
+      status: 'Starting...',
     });
-};
 
+    fetch('http://localhost:2076/start_augmentation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(augmentation),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Failed to start augmentation');
+        }
+        return response.json();
+      })
+      .catch((err) => {
+        console.error('Error starting augmentation:', err);
+        setAuError(err instanceof Error ? err.message : 'An unknown error occurred');
+        setIsProcessing(false);
+      });
+  };
+
+const stopAugmentation = async () => {
+  try {
+    const response = await fetch('http://localhost:2076/stop_augmentation', {
+      method: 'POST',
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.message || 'Failed to stop augmentation');
+    }
+    
+    setIsProcessing(false);
+    setIsStopping(false);
+    setProgress({
+      current: 0,
+      total: 0,
+      progress: 0,
+      status: 'Stopped'
+    });
+    
+  } catch (err) {
+    setAuError(err instanceof Error ? err.message : 'Failed to stop augmentation');
+    setIsStopping(false);
+  }
+};
 
 
 
@@ -199,47 +250,125 @@ return (
         <br />
         {loading ? (
           <Typography>Loading availability status...</Typography>
-        ) : error && success ? (
-          <Alert severity="error">{error}</Alert>
+        ) : availabilityError && success ? (
+          <Alert severity="error">{availabilityError}</Alert>
         ) : (
           <>
             <FormControlLabel
               control={<Checkbox checked={availability.train_images} disabled />}
-              label="Train Images"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.train_images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.train_images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Train Images
+                </span>
+              }
             />
             <br></br>
             <FormControlLabel
               control={<Checkbox checked={availability.train_segmentation_labels} disabled />}
-              label="Train Segmentation Labels"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.train_segmentation_labels ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.train_segmentation_labels ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Train Segmentation Labels
+                </span>
+              }
             />
             <br></br>
             <FormControlLabel
               control={<Checkbox checked={availability.train_mask_images} disabled />}
-              label="Train Masks"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.train_mask_images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.train_mask_images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Train Mask Images
+                </span>
+              }
             />
             <br></br>
             <FormControlLabel
               control={<Checkbox checked={availability.val_images} disabled />}
-              label="Val Images"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.val_images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.val_images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Val Images
+                </span>
+              }
             />
             <br></br>
             <FormControlLabel
               control={<Checkbox checked={availability.val_segmentation_labels} disabled />}
-              label="Val Segmentation Labels"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.val_segmentation_labels ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.val_segmentation_labels ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Val Segmentation Images
+                </span>
+              }
             />
             <br></br>
             <FormControlLabel
               control={<Checkbox checked={availability.val_mask_images} disabled />}
-              label="Val Masks"
+              sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.val_mask_images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+              label={
+                <span style={{
+                  color: availability.val_mask_images ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  Val Mask Images
+                </span>
+              }
             />
           </>
         )}
       </div>
-         <div style={{ flex: '1 1 66%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+         <div style={{ flex: '1 1 33%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h1 style={{ fontSize: '40px', fontWeight: 'bold' }}>Augmentation</h1>
             <Paper elevation={3} style={{ padding: '20px', marginBottom: '20px', width: '100vh' }}>
                       <Typography variant="h6" gutterBottom>Augmentation methods</Typography>
-                      {error && <Alert severity="warning" style={{ marginBottom: '20px' }}>{error}</Alert>}
+                      {auError && <Alert severity="warning" style={{ marginBottom: '20px' }}>{auError}</Alert>}
                       <Box component="form" noValidate autoComplete="off">
                         <FormControlLabel
                            control={<Checkbox 
@@ -326,7 +455,7 @@ return (
                              endAdornment: <InputAdornment position="end">times</InputAdornment>,
                            }}
                          />
-                         <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                         <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '20px', flexDirection: 'column' }}>
                            <Button 
                              variant="contained" 
                              color="primary" 
@@ -336,14 +465,26 @@ return (
                            >
                              {isProcessing ? 'Processing...' : 'Start Augmentation'}
                            </Button>
+                           <br></br>
+                           <Button 
+                              variant="contained" 
+                              color="error" 
+                              onClick={stopAugmentation}
+                              style={{ marginTop: '10px' }}
+                              disabled={!isProcessing || isStopping}
+                            >
+                              {isStopping ? 'Stopping...' : 'Stop Augmentation'}
+                            </Button>
+                            <br></br>
                            {isProcessing && (
                               <>
                                 <LinearProgress 
                                   variant="determinate" 
                                   value={progress.progress} 
-                                  style={{ width: '100%' }} 
+                                  style={{ width: '100%', marginTop: '20px' }} 
                                 />
-                                <Typography variant="body2" style={{ marginTop: '10px' }}>
+                                <br></br>
+                                <Typography variant="body2" style={{ marginTop: '20px' }}>
                                   {progress.status}: {progress.current}/{progress.total} images processed ({Math.round(progress.progress)}%)
                                 </Typography>
                               </>
@@ -351,6 +492,13 @@ return (
                          </Box>
                       </Box>
                       </Paper>
+        </div>
+        <div style={{ flex: '1 1 33%' }}></div>
+        <div style={{
+        position: 'absolute',
+        left: '20px',
+        bottom: '20px'
+      }}>
         <Link href="/datapreparation" passHref>
           <Button variant="contained">
             Back to Data Preparation Page

@@ -26,6 +26,7 @@ class AugmentImage:
         self._current_progress = 0
         self._total_files = 0
         self._processed_files = 0
+        self.stop = False
         
     async def get_data_availability(self):
         return {
@@ -206,11 +207,16 @@ class AugmentImage:
     def start_augmentation(self, data):
         try:
             logger.info("Augmentation started...")
+            self.stop = False
             self.clear_output_directories()
             self._processed_files = 0
             self._total_files = 0
             
             for img_file, mask_file, ann_file in self.get_image_triplets():
+                if self.stop:
+                    logger.info("Augmentation stopped by user")
+                    self.clear_output_directories()
+                    break
                 base_name = os.path.splitext(os.path.basename(img_file))[0]
                 image = cv2.imread(img_file)
                 mask = cv2.imread(mask_file)
@@ -250,6 +256,25 @@ class AugmentImage:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)
             )
-        
-        
+    async def stop_augmentation(self):
+        self._progress = 0
+        self._processed_files = 0
+        self._total_files = 0
+        self.stop = True
+        return {"status": "stopped", "message": "Augmentation stopped"}
 
+    def clear_output_directories(self):
+        for path in [self.aug_img_path, self.aug_mask_path, self.aug_annotation_path]:
+            if os.path.exists(path):
+                for file in os.listdir(path):
+                    file_path = os.path.join(path, file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {file_path}: {e}")
+                        continue
+            else:
+                os.makedirs(path, exist_ok=True)

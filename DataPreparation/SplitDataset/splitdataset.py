@@ -28,10 +28,21 @@ class SplitDataset:
         }
     
     async def get_data_availability(self):
+        def get_file_count(path):
+            if os.path.exists(path) and os.path.isdir(path):
+                return len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
+            return 0
+        
+        img_count = get_file_count(AppConfig.DATASET_IMAGES)
+        label_count = get_file_count(AppConfig.DATASET_LABELS)
+        mask_count = get_file_count(AppConfig.DATASET_MASKS)
+        
+        counts_equal = len({img_count, label_count, mask_count}) == 1
+        
         return {
-            "images": os.path.exists(AppConfig.DATASET_IMAGES) and bool(os.listdir(AppConfig.DATASET_IMAGES)),
-            "segmentation_labels": os.path.exists(AppConfig.DATASET_LABELS) and bool(os.listdir(AppConfig.DATASET_LABELS)),
-            "mask_images": os.path.exists(AppConfig.DATASET_MASKS) and bool(os.listdir(AppConfig.DATASET_MASKS))
+            "images": img_count > 0 and counts_equal,
+            "segmentation_labels": label_count > 0 and counts_equal,
+            "mask_images": mask_count > 0 and counts_equal
         }
         
     def start_split(self, data: Dict[str, any]):
@@ -167,6 +178,10 @@ class SplitDataset:
                    src_img_dir: str, src_label_dir: str, src_mask_dir: str,
                    dest_dirs: Dict[str, str]):
         for img_file in image_files:
+            
+            if self._total_files == 1 and self._processed_files == 0:
+                break
+            
             shutil.copy(
                 os.path.join(src_img_dir, img_file),
                 os.path.join(dest_dirs['images'], img_file)
@@ -190,3 +205,63 @@ class SplitDataset:
             
             self._processed_files += 1
             self._progress = int((self._processed_files / self._total_files) * 100)
+            
+    async def stop_split(self):
+        self._progress = 0
+        self._processed_files = 0
+        self._total_files = 1
+        
+        split_dirs = {
+            'train': {
+                'images': os.path.join(AppConfig.SPLIT_DATASET, 'train', 'images'),
+                'labels': os.path.join(AppConfig.SPLIT_DATASET, 'train', 'labels'),
+                'masks': os.path.join(AppConfig.SPLIT_DATASET, 'train', 'masks')
+            },
+            'val': {
+                'images': os.path.join(AppConfig.SPLIT_DATASET, 'val', 'images'),
+                'labels': os.path.join(AppConfig.SPLIT_DATASET, 'val', 'labels'),
+                'masks': os.path.join(AppConfig.SPLIT_DATASET, 'val', 'masks')
+            },
+            'test': {
+                'images': os.path.join(AppConfig.SPLIT_DATASET, 'test', 'images'),
+                'labels': os.path.join(AppConfig.SPLIT_DATASET, 'test', 'labels'),
+                'masks': os.path.join(AppConfig.SPLIT_DATASET, 'test', 'masks')
+            }
+        }
+        
+        try:
+            for split in split_dirs.values():
+                for dir_path in split.values():
+                    if os.path.exists(dir_path):
+                        self._clear_directory_contents(dir_path)
+            
+            return {"status": "stopped", "message": "Split operation stopped and directory contents cleared"}
+        except Exception as e:
+            logger.error(f"Error during stop: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during stop: {str(e)}"
+            )
+
+    def _clear_directory_contents(self, dir_path: str):
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                for filename in os.listdir(dir_path):
+                    file_path = os.path.join(dir_path, filename)
+                    try:
+                        if os.path.isfile(file_path) or os.path.islink(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except Exception as e:
+                        logger.warning(f"Could not delete {file_path}: {str(e)}")
+                        if attempt == max_retries - 1:
+                            raise
+                return
+            except Exception as e:
+                raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during stop: {str(e)}"
+            )

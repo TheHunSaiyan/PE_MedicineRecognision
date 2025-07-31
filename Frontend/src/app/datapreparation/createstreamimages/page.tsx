@@ -1,9 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Radio, LinearProgress } from '@mui/material';
+import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Radio, LinearProgress, Snackbar } from '@mui/material';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
+import MuiAlert, { AlertProps } from '@mui/material/Alert';
+
+const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
+  props,
+  ref,
+) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
 
 interface DataAvailability {
   images: boolean;
@@ -20,7 +28,8 @@ const [availability, setAvailability] = useState<DataAvailability>({
     background_changed: false
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [selectedMode, setSelectedMode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -30,6 +39,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
       processed: 0,
       total: 0
     });
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
       const fetchDataAvailability = async () => {
@@ -47,7 +57,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
           });
           setSuccess(true);
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'An unknown error occurred');
+          setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
         } finally {
           setLoading(false);
         }
@@ -62,12 +72,12 @@ const [availability, setAvailability] = useState<DataAvailability>({
 
     const startSplit = async () => {
     if (selectedMode === '') {
-        setError(`You must choose a mode!`);
+        setStreamError(`You must choose a mode!`);
         return;
     }
 
     setIsProcessing(true);
-    setError(null);
+    setStreamError(null);
 
     try {
         const response = await fetch('http://localhost:2076/start_stream_images', {
@@ -83,7 +93,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
         }
         
     } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        setStreamError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
 };
 
@@ -105,6 +115,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
               
               if (data.progress === 100) {
                 clearInterval(intervalId);
+                setSnackbarOpen(true)
                 setIsProcessing(false);
               }
             }
@@ -119,6 +130,13 @@ const [availability, setAvailability] = useState<DataAvailability>({
       };
     }, [isProcessing]);
 
+    const handleSnackbarClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
+        if (reason === 'clickaway') {
+          return;
+        }
+        setSnackbarOpen(false);
+      };
+
   return(
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
         <div style={{ flex: '1 1 33%' }}>
@@ -126,34 +144,87 @@ const [availability, setAvailability] = useState<DataAvailability>({
             <br />
             {loading ? (
               <Typography>Loading availability status...</Typography>
-            ) : error && success ? (
-              <Alert severity="error">{error}</Alert>
+            ) : availabilityError && success ? (
+              <Alert severity="error">{availabilityError}</Alert>
             ) : (
               <>
                 <FormControlLabel
                   control={<Checkbox checked={availability.images} disabled />}
-                  label="Images"
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: availability.images ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      Images
+                    </span>
+                  }
                 />
                 <br></br>
                 <FormControlLabel
                   control={<Checkbox checked={availability.mask_images} disabled />}
-                  label="Masks"
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.mask_images ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: availability.mask_images ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      Masks
+                    </span>
+                  }
                 /><br></br>
                 <FormControlLabel
                   control={<Checkbox checked={availability.split} disabled />}
-                  label="Split Consumer/Reference"
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.split ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: availability.split ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      Split Consumer/Reference
+                    </span>
+                  }
                 />
                 <br></br>
                 <FormControlLabel
                   control={<Checkbox checked={availability.background_changed} disabled />}
-                  label="Background Changed"
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: availability.background_changed ? '#04e762' : '#ef233c' ,
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: availability.background_changed ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      Background Changed
+                    </span>
+                  }
                 />
               </>
             )}
           </div>
-          <div style={{ flex: '1 1 66%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 33%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h1 style={{ fontSize: '40px', fontWeight: 'bold' }}>Create Stream Images</h1>
-
+            <div>
+            {streamError && <Alert severity="warning" style={{ marginBottom: '20px' }}>{streamError}</Alert>}
             <FormControlLabel
                 control={
                   <Radio
@@ -165,7 +236,6 @@ const [availability, setAvailability] = useState<DataAvailability>({
                 }
                 label="Consumer"
               />
-              <br></br>
               <FormControlLabel
                 control={
                   <Radio
@@ -177,6 +247,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
                 }
                 label="Reference"
               />
+              </div>
               <br></br>
               <Button 
                 variant="contained" 
@@ -202,6 +273,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
                     </Typography>
                   )}
           </div>
+          <div style={{ flex: '1 1 33%' }}></div>
           <div style={{
         position: 'absolute',
         left: '20px',
@@ -213,6 +285,16 @@ const [availability, setAvailability] = useState<DataAvailability>({
           </Button>
         </Link>
         </div>
+        <Snackbar 
+          open={snackbarOpen} 
+          autoHideDuration={6000} 
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <AlertComponent onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
+            Stream images successfully created!
+          </AlertComponent>
+        </Snackbar>
     </div>
   );
 

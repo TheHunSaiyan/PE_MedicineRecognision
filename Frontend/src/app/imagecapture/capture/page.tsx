@@ -224,26 +224,8 @@ const formatMedicationName = (name: string): string => {
 
   return (
     <div className="camera-container" style={{ padding: '20px', height: '100vh' }}>
-      { isClient && (
-     <Select<SelectOption>
-        options={pillsOptions}
-        isLoading={isLoadingPills}
-        onChange={(selected) => {
-          setSelectedOption(selected?.label ?? null);
-        }}
-        value={pillsOptions.find(option => option.value === selectedOption)}
-        placeholder={isLoadingPills ? "Loading pills..." : "Select a pill"}
-        styles={{
-          control: (base) => ({
-            ...base,
-            marginBottom: '20px'
-          }),
-          option: (base) => ({
-            ...base,
-            color: 'black'
-          }),
-        }}
-      />)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+      <div>
       <Button 
           variant="contained"
           onClick={captureImage} 
@@ -308,6 +290,31 @@ const formatMedicationName = (name: string): string => {
               label="Bottom Side"
               style={{ marginRight: '10px' }}
             />
+            </div>
+            {isClient && (
+    <div style={{ minWidth: '300px', marginLeft: '50px' }}>
+      <Select<SelectOption>
+        options={pillsOptions}
+        isLoading={isLoadingPills}
+        onChange={(selected) => {
+          setSelectedOption(selected?.value ?? null);
+        }}
+        value={pillsOptions.find(option => option.value === selectedOption)}
+        placeholder={isLoadingPills ? "Loading pills..." : "Select a pill"}
+        styles={{
+          control: (base) => ({
+            ...base,
+            marginBottom: 0
+          }),
+          option: (base) => ({
+            ...base,
+            color: 'black'
+          }),
+        }}
+      />
+    </div>
+  )}
+  </div>
       
       {error && <div className="error-message">{error}</div>}
       
