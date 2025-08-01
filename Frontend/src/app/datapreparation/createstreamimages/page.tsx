@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Radio, LinearProgress, Snackbar } from '@mui/material';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
+import { closeSnackbar, SnackbarProvider } from 'notistack';
+import { useSnackbar } from 'notistack';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -27,6 +29,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
     split: false,
     background_changed: false
   });
+  const [availabilitySuccess, setAvailabilitySuccess] = useState(false)
   const [loading, setLoading] = useState(true);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -39,32 +42,77 @@ const [availability, setAvailability] = useState<DataAvailability>({
       processed: 0,
       total: 0
     });
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const { enqueueSnackbar } = useSnackbar();
+
+  const handleMissingData = async (currentData: DataAvailability) => {
+    try {
+      console.log(currentData);
+      if (!currentData.split && currentData.images && currentData.mask_images) {
+        enqueueSnackbar("Images haven't been sorted by Consumer/Reference. Starting it now", { 
+          variant: 'info',
+          autoHideDuration: 10000
+        });
+        const response = await fetch('http://localhost:2076/split_consumer_reference', {
+          method: 'POST'
+        });
+        if (!response.ok) {
+          throw new Error('Failed to split consumer reference');
+        }
+        enqueueSnackbar('Consumer/Reference split completed successfully!', { 
+          variant: 'success',
+          autoHideDuration: 10000
+        });
+      }
+      if (!currentData.background_changed && currentData.images && currentData.mask_images) {
+        enqueueSnackbar("Image backgrounds haven't been removed yet. Starting it now", { 
+          variant: 'info',
+          autoHideDuration: 10000
+        });
+        const response = await fetch('http://localhost:2076/change_background', {
+          method: 'POST'
+        });
+        if (!response.ok) {
+          throw new Error('Failed to change background');
+        }
+        enqueueSnackbar('Background change completed successfully!', { 
+          variant: 'success',
+          autoHideDuration: 10000
+        });
+      }
+    } catch (err) {
+      setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
+    }
+  };
 
   useEffect(() => {
-      const fetchDataAvailability = async () => {
-        try {
-          const response = await fetch('http://localhost:2076/data_availability_for_stream_images');
-          if (!response.ok) {
-            throw new Error('Failed to fetch data availability');
-          }
-          const data = await response.json();
-          setAvailability({
-            images: data.images,
-            mask_images: data.mask_images,
-            split: data.split,
-            background_changed: data.background_changed
-          });
-          setSuccess(true);
-        } catch (err) {
-          setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
-        } finally {
-          setLoading(false);
+    const fetchDataAvailability = async () => {
+      try {
+        const response = await fetch('http://localhost:2076/data_availability_for_stream_images');
+        if (!response.ok) {
+          throw new Error('Failed to fetch data availability');
         }
-      };
-  
-      fetchDataAvailability();
-    }, []);
+        const data = await response.json();
+        
+        setAvailability(data);
+        
+        if (!data.split || !data.background_changed) {
+          await handleMissingData(data);
+          
+          const newResponse = await fetch('http://localhost:2076/data_availability_for_stream_images');
+          const newData = await newResponse.json();
+          setAvailability(newData);
+        }
+        
+        setSuccess(true);
+      } catch (err) {
+        setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDataAvailability();
+  }, []);
 
     const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       setSelectedMode(event.target.value);
@@ -115,7 +163,10 @@ const [availability, setAvailability] = useState<DataAvailability>({
               
               if (data.progress === 100) {
                 clearInterval(intervalId);
-                setSnackbarOpen(true)
+                enqueueSnackbar('Stream images successfully created!', { 
+                variant: 'success',
+                autoHideDuration: 10000
+              });
                 setIsProcessing(false);
               }
             }
@@ -129,13 +180,6 @@ const [availability, setAvailability] = useState<DataAvailability>({
         if (intervalId) clearInterval(intervalId);
       };
     }, [isProcessing]);
-
-    const handleSnackbarClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
-        if (reason === 'clickaway') {
-          return;
-        }
-        setSnackbarOpen(false);
-      };
 
   return(
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
@@ -256,7 +300,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
                 style={{ marginTop: '20px' }}
                 disabled={isProcessing && selectedMode==''}
               >
-                {isProcessing ? 'Processing...' : 'Start'}
+                {isProcessing && availabilitySuccess ? 'Processing...' : 'Start'}
               </Button>
               <div>
                 <br></br>
@@ -285,20 +329,29 @@ const [availability, setAvailability] = useState<DataAvailability>({
           </Button>
         </Link>
         </div>
-        <Snackbar 
-          open={snackbarOpen} 
-          autoHideDuration={6000} 
-          onClose={handleSnackbarClose}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <AlertComponent onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
-            Stream images successfully created!
-          </AlertComponent>
-        </Snackbar>
     </div>
   );
 
 
 };
 
-export default CameraApp;
+const CameraAppWithSnackbar = () => (
+  <SnackbarProvider 
+    maxSnack={6} 
+    autoHideDuration={10000} 
+    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+    preventDuplicate
+    action={(snackbarId) => (
+    <button 
+      onClick={() => closeSnackbar(snackbarId)}
+      style={{ color: 'white', background: 'transparent', border: 'none' }}
+    >
+      ✕
+    </button>
+  )}
+  >
+    <CameraApp />
+  </SnackbarProvider>
+);
+
+export default CameraAppWithSnackbar;

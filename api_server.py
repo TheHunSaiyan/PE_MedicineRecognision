@@ -176,6 +176,14 @@ class APIServer:
         async def get_data_availability():
             return await self.stream_image.get_data_availability()
         
+        @self.app.post("/split_consumer_reference")
+        async def split_consumer_refernce():
+            return await self.stream_image.split_consumer_reference()
+        
+        @self.app.post("/change_background")
+        async def change_background():
+            return await self.stream_image.change_background()
+        
         @self.app.post("/start_stream_images")
         async def start_stream_images(data: Dict[str, Any]):
             return await run_in_threadpool(self.stream_image.start_stream_images, data)

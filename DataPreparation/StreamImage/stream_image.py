@@ -1,7 +1,9 @@
 import cv2
+import random
 import concurrent.futures
 import numpy as np
 import os
+import shutil
 
 from fastapi import HTTPException, status
 from skimage.feature import local_binary_pattern
@@ -36,6 +38,136 @@ class StreamImage():
                                 bool(os.listdir(AppConfig.REFERENCE_IMAGES_WO_BG))
                             )
         }
+        
+    async def split_consumer_reference(self):
+        try:
+            logger.info("Spliting images into consumer and reference...")
+            os.makedirs(AppConfig.CONSUMER_IMAGES, exist_ok=True)
+            os.makedirs(AppConfig.REFERENCE_IMAGES, exist_ok=True)
+            os.makedirs(AppConfig.CONSUMER_MASK_IMAGES, exist_ok=True)
+            os.makedirs(AppConfig.REFERENCE_MASK_IMAGES, exist_ok=True)
+            
+            image_files = [f for f in os.listdir(AppConfig.DATASET_IMAGES) if f.endswith('.jpg')]
+            mask_files = [f for f in os.listdir(AppConfig.DATASET_MASKS) if f.endswith('.jpg')]
+            
+            s_pairs = []
+            u_pairs = []
+            
+            for img_file in image_files:
+                base_name = os.path.splitext(img_file)[0]
+                if '_s_' in base_name:
+                    mask_file = base_name + '.jpg'
+                    if mask_file in mask_files:
+                        s_pairs.append((img_file, mask_file))
+                elif '_u_' in base_name:
+                    mask_file = base_name + '.jpg'
+                    if mask_file in mask_files:
+                        u_pairs.append((img_file, mask_file))
+                else:
+                    logger.warning(f"Skipping {base_name} because of invalid name.")
+                    
+            if len(s_pairs) < 1 or len(u_pairs) < 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Not enough image pairs with 's' and 'u' tags found"
+                )
+                
+            selected_s = random.choice(s_pairs)
+            selected_u = random.choice(u_pairs)
+            
+            reference_pairs = [selected_s, selected_u]
+            
+            consumer_pairs = []
+
+            for pair in s_pairs:
+                if pair != selected_s:
+                    consumer_pairs.append(pair)
+            for pair in u_pairs:
+                if pair != selected_u:
+                    consumer_pairs.append(pair)
+                    
+            for img_file, mask_file in reference_pairs:
+                shutil.copy2(
+                    os.path.join(AppConfig.DATASET_IMAGES, img_file),
+                    os.path.join(AppConfig.REFERENCE_IMAGES, img_file))
+                shutil.copy2(
+                    os.path.join(AppConfig.DATASET_MASKS, mask_file),
+                    os.path.join(AppConfig.REFERENCE_MASK_IMAGES, mask_file))
+
+            for img_file, mask_file in consumer_pairs:
+                shutil.copy2(
+                    os.path.join(AppConfig.DATASET_IMAGES, img_file),
+                    os.path.join(AppConfig.CONSUMER_IMAGES, img_file))
+                shutil.copy2(
+                    os.path.join(AppConfig.DATASET_MASKS, mask_file),
+                    os.path.join(AppConfig.CONSUMER_MASK_IMAGES, mask_file))
+                
+            return {
+                "status": "success"
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error during splitting images: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during splitting images: {str(e)}"
+            )
+    
+    async def change_background(self):
+        try:
+            logger.info("Changing image backgrounds...")
+             
+            os.makedirs(AppConfig.CONSUMER_IMAGES_WO_BG, exist_ok=True)
+            os.makedirs(AppConfig.REFERENCE_IMAGES_WO_BG, exist_ok=True)
+            
+            for mode in ["consumer", "reference"]:
+                paths = self.path_selector(mode)
+                image_files = [f for f in os.listdir(paths["images"]) if f.endswith('.jpg')]
+                mask_files = [f for f in os.listdir(paths["masks"]) if f.endswith('.jpg')]
+                
+                image_mask_pairs = []
+                for img_file in image_files:
+                    mask_file = img_file
+                    if mask_file in mask_files:
+                        image_mask_pairs.append((img_file, mask_file))
+                        
+                bg_color = (145, 145, 151)
+                
+                for img_file, mask_file in image_mask_pairs:
+                    img_path = os.path.join(paths["images"], img_file)
+                    mask_path = os.path.join(paths["masks"], mask_file)
+                    
+                    image = cv2.imread(img_path)
+                    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                    
+                    mask = cv2.resize(mask, (image.shape[1], image.shape[0]))
+                    mask = cv2.threshold(mask, 128, 255, cv2.THRESH_BINARY)[1].astype(np.uint8)
+                    
+                    background = np.ones(image.shape, dtype=np.uint8)
+                    background[:, :, 0] = bg_color[0]
+                    background[:, :, 1] = bg_color[1]
+                    background[:, :, 2] = bg_color[2]
+                    
+                    foreground = cv2.bitwise_and(image, image, mask=mask)
+                    
+                    background = cv2.bitwise_and(background, background, mask=cv2.bitwise_not(mask))
+                    
+                    output_image = cv2.add(foreground, background)
+                    
+                    output_dir = AppConfig.CONSUMER_IMAGES_WO_BG if mode == "consumer" else AppConfig.REFERENCE_IMAGES_WO_BG
+                    output_path = os.path.join(output_dir, img_file)
+                    cv2.imwrite(output_path, output_image)
+            
+            return {"status": "success"}
+            
+        
+        except Exception as e:
+            logger.error(f"Error during background change: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during background change: {str(e)}"
+            )
         
     def path_selector(self, mode: str) -> dict:
         if mode.lower() == "consumer":
@@ -254,6 +386,8 @@ class StreamImage():
             os.makedirs(paths["texture"], exist_ok=True)
             os.makedirs(paths["lbp"], exist_ok=True)
             
+            self.clear_output()
+            
             self.save_rgb_images(paths["wo_bg"], paths["masks"], paths["rgb"])
             self.save_contour_images(paths["rgb"], paths["contour"])
             self.save_texture_images(paths["rgb"], paths["texture"])
@@ -289,3 +423,52 @@ class StreamImage():
             "total": self.total,
             "is_processing": self.is_processing
         }
+        
+    def clear_output(self):
+        try:
+            paths = self.path_selector(self.selected_mode)
+            
+            if os.path.exists(paths["rgb"]):
+                for file in os.listdir(paths["rgb"]):
+                    file_path = os.path.join(paths["rgb"], file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {file_path}: {str(e)}")
+            
+            if os.path.exists(paths["contour"]):
+                for file in os.listdir(paths["contour"]):
+                    file_path = os.path.join(paths["contour"], file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {file_path}: {str(e)}")
+            
+            if os.path.exists(paths["texture"]):
+                for file in os.listdir(paths["texture"]):
+                    file_path = os.path.join(paths["texture"], file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {file_path}: {str(e)}")
+            
+            if os.path.exists(paths["lbp"]):
+                for file in os.listdir(paths["lbp"]):
+                    file_path = os.path.join(paths["lbp"], file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {file_path}: {str(e)}")
+                        
+            logger.info(f"Cleared output directories for {self.selected_mode} mode")
+            
+        except Exception as e:
+            logger.error(f"Error clearing output directories: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error clearing output directories: {str(e)}"
+            )
