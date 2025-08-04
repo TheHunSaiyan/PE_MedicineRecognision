@@ -15,12 +15,20 @@ from Logger.logger import logger
 
 class AugmentImage:
     def __init__(self, stop_event=None):
-        self.image_path = AppConfig.SPLIT_TRAIN_IMAGES
-        self.mask_path = AppConfig.SPLIT_TRAIN_MASKS
-        self.annotation_path = AppConfig.SPLIT_TRAIN_LABELS
-        self.aug_img_path = AppConfig.AUG_IMAGES
-        self.aug_mask_path = AppConfig.AUG_MASKS
-        self.aug_annotation_path = AppConfig.AUG_ANN
+        self.train_image_path = AppConfig.SPLIT_TRAIN_IMAGES
+        self.train_mask_path = AppConfig.SPLIT_TRAIN_MASKS
+        self.train_annotation_path = AppConfig.SPLIT_TRAIN_LABELS
+        self.val_image_path = AppConfig.SPLIT_VAL_IMAGES
+        self.val_mask_path = AppConfig.SPLIT_VAL_MASKS
+        self.val_annotation_path = AppConfig.SPLIT_VAL_LABELS
+        
+        self.aug_train_img_path = AppConfig.AUG_TRAIN_IMAGES
+        self.aug_train_mask_path = AppConfig.AUG_TRAIN_MASKS
+        self.aug_train_annotation_path = AppConfig.AUG_TRAIN_ANN
+        self.aug_val_img_path = AppConfig.AUG_VAL_IMAGES
+        self.aug_val_mask_path = AppConfig.AUG_VAL_MASKS
+        self.aug_val_annotation_path = AppConfig.AUG_VAL_ANN
+        
         self.backgrounds_path = AppConfig.BACKGROUND_IMAGES
         self.stop_event = stop_event
         self._current_progress = 0
@@ -38,9 +46,11 @@ class AugmentImage:
             "train_mask_images": os.path.exists(AppConfig.SPLIT_TRAIN_MASKS) and bool(os.listdir(AppConfig.SPLIT_TRAIN_MASKS))
         }
 
-
     def clear_output_directories(self):
-        for path in [self.aug_img_path, self.aug_mask_path, self.aug_annotation_path]:
+        for path in [
+            self.aug_train_img_path, self.aug_train_mask_path, self.aug_train_annotation_path,
+            self.aug_val_img_path, self.aug_val_mask_path, self.aug_val_annotation_path
+        ]:
             if os.path.exists(path):
                 for file in os.listdir(path):
                     file_path = os.path.join(path, file)
@@ -55,7 +65,7 @@ class AugmentImage:
             else:
                 os.makedirs(path, exist_ok=True)
 
-    def save_data(self, image, mask, method, txt_op="copy", txt_file=None, base_name=None):
+    def save_data(self, image, mask, method, txt_op="copy", txt_file=None, base_name=None, is_train=True):
         if image is None or image.size == 0:
            print("Warning: Empty image, skipping save.")
            return
@@ -63,13 +73,18 @@ class AugmentImage:
            print("Warning: Empty mask, skipping save.")
            return
        
-        os.makedirs(self.aug_img_path, exist_ok=True)
-        os.makedirs(self.aug_mask_path, exist_ok=True)
-        os.makedirs(self.aug_annotation_path, exist_ok=True)
-    
-        img_out_path = os.path.join(self.aug_img_path, f"{base_name}.png")
-        mask_out_path = os.path.join(self.aug_mask_path, f"{base_name}.png")
-        ann_out_path = os.path.join(self.aug_annotation_path, f"{base_name}.txt")
+        if is_train:
+            img_out_path = os.path.join(self.aug_train_img_path, f"{base_name}.png")
+            mask_out_path = os.path.join(self.aug_train_mask_path, f"{base_name}.png")
+            ann_out_path = os.path.join(self.aug_train_annotation_path, f"{base_name}.txt")
+        else:
+            img_out_path = os.path.join(self.aug_val_img_path, f"{base_name}.png")
+            mask_out_path = os.path.join(self.aug_val_mask_path, f"{base_name}.png")
+            ann_out_path = os.path.join(self.aug_val_annotation_path, f"{base_name}.txt")
+        
+        os.makedirs(os.path.dirname(img_out_path), exist_ok=True)
+        os.makedirs(os.path.dirname(mask_out_path), exist_ok=True)
+        os.makedirs(os.path.dirname(ann_out_path), exist_ok=True)
     
         cv2.imwrite(img_out_path, image)
         cv2.imwrite(mask_out_path, mask)
@@ -77,25 +92,32 @@ class AugmentImage:
         if txt_op == "copy" and txt_file and os.path.exists(txt_file):
             shutil.copy(txt_file, ann_out_path)
 
-
-    def get_image_triplets(self):
-        files = sorted(glob.glob(os.path.join(self.image_path, "*.*")))
+    def get_image_triplets(self, is_train=True):
+        if is_train:
+            image_path = self.train_image_path
+            mask_path = self.train_mask_path
+            annotation_path = self.train_annotation_path
+        else:
+            image_path = self.val_image_path
+            mask_path = self.val_mask_path
+            annotation_path = self.val_annotation_path
+            
+        files = sorted(glob.glob(os.path.join(image_path, "*.*")))
         self._total_files = 0
         
-        print(f"Found {len(files)} image files")
+        logger.info(f"Found {len(files)} image files in {'train' if is_train else 'val'} set")
         
         valid_triplets = []
         for img_file in files:
             base_name = os.path.splitext(os.path.basename(img_file))[0]
-            mask_file = os.path.join(self.mask_path, f"{base_name}.jpg")
-            ann_file = os.path.join(self.annotation_path, f"{base_name}.txt")
+            mask_file = os.path.join(mask_path, f"{base_name}.jpg")
+            ann_file = os.path.join(annotation_path, f"{base_name}.txt")
             if os.path.exists(mask_file) and os.path.exists(ann_file):
-                valid_triplets.append((img_file, mask_file, ann_file))
+                valid_triplets.append((img_file, mask_file, ann_file, is_train))
         
         self._total_files = len(valid_triplets)
         for triplet in valid_triplets:
             yield triplet
-
 
     def apply_white_balance(self, image):
         scale_factors = np.random.uniform(0.7, 1.2, size=(3,))
@@ -150,7 +172,6 @@ class AugmentImage:
         composite = image.copy()
         composite[~fg_mask] = background[~fg_mask]
         return composite
-
 
     def generate_rA9(self):
         while True:
@@ -212,11 +233,12 @@ class AugmentImage:
             self._processed_files = 0
             self._total_files = 0
             
-            for img_file, mask_file, ann_file in self.get_image_triplets():
+            for img_file, mask_file, ann_file, is_train in self.get_image_triplets(is_train=True):
                 if self.stop:
                     logger.info("Augmentation stopped by user")
                     self.clear_output_directories()
                     break
+                
                 base_name = os.path.splitext(os.path.basename(img_file))[0]
                 image = cv2.imread(img_file)
                 mask = cv2.imread(mask_file)
@@ -241,10 +263,45 @@ class AugmentImage:
                 if data.get("qr_code"):
                     image = self.qr_code(image)
         
-                self.save_data(image, mask, method="combined", txt_op="copy", txt_file=ann_file, base_name=base_name)
+                self.save_data(image, mask, method="combined", txt_op="copy", 
+                             txt_file=ann_file, base_name=base_name, is_train=True)
                 self._processed_files += 1
                 
-            logger.info("Successfull augmentation.")
+            for img_file, mask_file, ann_file, is_train in self.get_image_triplets(is_train=False):
+                if self.stop:
+                    logger.info("Augmentation stopped by user")
+                    self.clear_output_directories()
+                    break
+                
+                base_name = os.path.splitext(os.path.basename(img_file))[0]
+                image = cv2.imread(img_file)
+                mask = cv2.imread(mask_file)
+        
+                if image is None or mask is None:
+                    continue
+        
+                if data.get("white_balance"):
+                    image = self.apply_white_balance(image)
+                if data.get("blur"):
+                    image = self.apply_blur(image)
+                if data.get("brightness"):
+                    image = self.apply_brightness(image)
+                if data.get("rotate"):
+                    image, mask = self.apply_rotation(image, mask)
+                if data.get("shift"):
+                    image, mask = self.apply_shift(image, mask)
+                if data.get("zoom"):
+                    image, mask = self.apply_zoom(image, mask)
+                if data.get("change_background"):
+                    image = self.apply_background_change(image, mask)
+                if data.get("qr_code"):
+                    image = self.qr_code(image)
+        
+                self.save_data(image, mask, method="combined", txt_op="copy", 
+                             txt_file=ann_file, base_name=base_name, is_train=False)
+                self._processed_files += 1
+                
+            logger.info("Successful augmentation.")
             return {
                 "status": "success"
             }
@@ -256,6 +313,7 @@ class AugmentImage:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)
             )
+            
     async def stop_augmentation(self):
         self._progress = 0
         self._processed_files = 0
@@ -264,7 +322,10 @@ class AugmentImage:
         return {"status": "stopped", "message": "Augmentation stopped"}
 
     def clear_output_directories(self):
-        for path in [self.aug_img_path, self.aug_mask_path, self.aug_annotation_path]:
+        for path in [
+            self.aug_train_img_path, self.aug_train_mask_path, self.aug_train_annotation_path,
+            self.aug_val_img_path, self.aug_val_mask_path, self.aug_val_annotation_path
+        ]:
             if os.path.exists(path):
                 for file in os.listdir(path):
                     file_path = os.path.join(path, file)

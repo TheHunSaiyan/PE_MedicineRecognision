@@ -33,9 +33,9 @@ class SplitDataset:
                 return len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
             return 0
         
-        img_count = get_file_count(AppConfig.DATASET_IMAGES)
-        label_count = get_file_count(AppConfig.DATASET_LABELS)
-        mask_count = get_file_count(AppConfig.DATASET_MASKS)
+        img_count = get_file_count(AppConfig.ORIGINAL_IMAGES)
+        label_count = get_file_count(AppConfig.ORIGINAL_LABELS)
+        mask_count = get_file_count(AppConfig.ORIGINAL_MASKS)
         
         counts_equal = len({img_count, label_count, mask_count}) == 1
         
@@ -57,9 +57,9 @@ class SplitDataset:
             test_pct = data.get('test')
             segregated = data.get('segregated')
             
-            image_dir = AppConfig.DATASET_IMAGES
-            seg_label_dir = AppConfig.DATASET_LABELS
-            mask_dir = AppConfig.DATASET_MASKS
+            image_dir = AppConfig.ORIGINAL_IMAGES
+            seg_label_dir = AppConfig.ORIGINAL_LABELS
+            mask_dir = AppConfig.ORIGINAL_MASKS
             
             if not all([
                 os.path.exists(image_dir) and os.listdir(image_dir),

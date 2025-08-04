@@ -23,8 +23,8 @@ class StreamImage():
     
     async def get_data_availability(self):
         return {
-            "images": os.path.exists(AppConfig.DATASET_IMAGES) and bool(os.listdir(AppConfig.DATASET_IMAGES)),
-            "mask_images": os.path.exists(AppConfig.DATASET_MASKS) and bool(os.listdir(AppConfig.DATASET_MASKS)),
+            "images": os.path.exists(AppConfig.ORIGINAL_IMAGES) and bool(os.listdir(AppConfig.ORIGINAL_IMAGES)),
+            "mask_images": os.path.exists(AppConfig.ORIGINAL_MASKS) and bool(os.listdir(AppConfig.ORIGINAL_MASKS)),
             "split": (
                     os.path.exists(AppConfig.CONSUMER_IMAGES) and 
                     os.path.exists(AppConfig.REFERENCE_IMAGES) and
@@ -47,8 +47,8 @@ class StreamImage():
             os.makedirs(AppConfig.CONSUMER_MASK_IMAGES, exist_ok=True)
             os.makedirs(AppConfig.REFERENCE_MASK_IMAGES, exist_ok=True)
             
-            image_files = [f for f in os.listdir(AppConfig.DATASET_IMAGES) if f.endswith('.jpg')]
-            mask_files = [f for f in os.listdir(AppConfig.DATASET_MASKS) if f.endswith('.jpg')]
+            image_files = [f for f in os.listdir(AppConfig.ORIGINAL_IMAGES) if f.endswith('.jpg')]
+            mask_files = [f for f in os.listdir(AppConfig.ORIGINAL_MASKS) if f.endswith('.jpg')]
             
             s_pairs = []
             u_pairs = []
@@ -88,18 +88,18 @@ class StreamImage():
                     
             for img_file, mask_file in reference_pairs:
                 shutil.copy2(
-                    os.path.join(AppConfig.DATASET_IMAGES, img_file),
+                    os.path.join(AppConfig.ORIGINAL_IMAGES, img_file),
                     os.path.join(AppConfig.REFERENCE_IMAGES, img_file))
                 shutil.copy2(
-                    os.path.join(AppConfig.DATASET_MASKS, mask_file),
+                    os.path.join(AppConfig.ORIGINAL_MASKS, mask_file),
                     os.path.join(AppConfig.REFERENCE_MASK_IMAGES, mask_file))
 
             for img_file, mask_file in consumer_pairs:
                 shutil.copy2(
-                    os.path.join(AppConfig.DATASET_IMAGES, img_file),
+                    os.path.join(AppConfig.ORIGINAL_IMAGES, img_file),
                     os.path.join(AppConfig.CONSUMER_IMAGES, img_file))
                 shutil.copy2(
-                    os.path.join(AppConfig.DATASET_MASKS, mask_file),
+                    os.path.join(AppConfig.ORIGINAL_MASKS, mask_file),
                     os.path.join(AppConfig.CONSUMER_MASK_IMAGES, mask_file))
                 
             return {

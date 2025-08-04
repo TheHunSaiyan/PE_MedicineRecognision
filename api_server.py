@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, status, Body
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +32,7 @@ from DataPreparation.SplitDataset.splitdataset import SplitDataset
 from DataPreparation.AugmentImage.augment_image import AugmentImage
 from DataPreparation.StreamImage.stream_image import StreamImage
 from DataPreparation.KFoldSort.kfoldsort import KFoldSort
+from DataPreparation.RemapAnnotation.remapannotation import RemapAnnotation
 
 class APIServer:
     def __init__(self):
@@ -49,6 +50,7 @@ class APIServer:
         self.augment_image = AugmentImage()
         self.stream_image = StreamImage()
         self.kfoldsort = KFoldSort()
+        self.remapannotation = RemapAnnotation()
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -200,6 +202,14 @@ class APIServer:
         @self.app.get("/get_sort_process")
         async def get_sort_process():
             return await self.kfoldsort.get_sort_progress()
+        
+        @self.app.post("/start_remap_annotation")
+        async def start_remap(files: List[UploadFile] = File(...)):
+            return await self.remapannotation.start_remap(files)
+        
+        @self.app.get("/get_remap_annotation_progress")
+        async def get_progress():
+            return await self.remapannotation.get_progress()
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn
