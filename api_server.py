@@ -194,6 +194,10 @@ class APIServer:
         async def get_stream_image_progress():
             return await self.stream_image.get_progress()
         
+        @self.app.post("/get_fold")
+        async def get_fold(data: Dict[str, Any]):
+            return await self.kfoldsort.get_fold(data)
+        
         @self.app.post("/start_sort")
         async def start_sort(data: Dict[str, Any]):
             threading.Thread(target=self.kfoldsort.start_sorting, args=(data,), daemon=True).start()

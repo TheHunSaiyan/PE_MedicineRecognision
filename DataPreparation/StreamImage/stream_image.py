@@ -4,6 +4,7 @@ import concurrent.futures
 import numpy as np
 import os
 import shutil
+import re
 
 from fastapi import HTTPException, status
 from skimage.feature import local_binary_pattern
@@ -20,6 +21,18 @@ class StreamImage():
         self.total = 0
         self.is_processing = False
         self.selected_mode = ""
+    
+    def extract_pill_name(self, filename: str) -> str:
+        match = re.match(r'^(.+?)_[su]_', filename)
+        if match:
+            return match.group(1)
+        return "unknown_pill"
+    
+    def ensure_pill_directory(self, base_path: str, filename: str) -> str:
+        pill_name = self.extract_pill_name(filename)
+        pill_dir = os.path.join(base_path, pill_name)
+        os.makedirs(pill_dir, exist_ok=True)
+        return pill_dir
     
     async def get_data_availability(self):
         return {
@@ -87,20 +100,26 @@ class StreamImage():
                     consumer_pairs.append(pair)
                     
             for img_file, mask_file in reference_pairs:
+                ref_img_pill_dir = self.ensure_pill_directory(AppConfig.REFERENCE_IMAGES, img_file)
+                ref_mask_pill_dir = self.ensure_pill_directory(AppConfig.REFERENCE_MASK_IMAGES, mask_file)
+                
                 shutil.copy2(
                     os.path.join(AppConfig.ORIGINAL_IMAGES, img_file),
-                    os.path.join(AppConfig.REFERENCE_IMAGES, img_file))
+                    os.path.join(ref_img_pill_dir, img_file))
                 shutil.copy2(
                     os.path.join(AppConfig.ORIGINAL_MASKS, mask_file),
-                    os.path.join(AppConfig.REFERENCE_MASK_IMAGES, mask_file))
+                    os.path.join(ref_mask_pill_dir, mask_file))
 
             for img_file, mask_file in consumer_pairs:
+                cons_img_pill_dir = self.ensure_pill_directory(AppConfig.CONSUMER_IMAGES, img_file)
+                cons_mask_pill_dir = self.ensure_pill_directory(AppConfig.CONSUMER_MASK_IMAGES, mask_file)
+                
                 shutil.copy2(
                     os.path.join(AppConfig.ORIGINAL_IMAGES, img_file),
-                    os.path.join(AppConfig.CONSUMER_IMAGES, img_file))
+                    os.path.join(cons_img_pill_dir, img_file))
                 shutil.copy2(
                     os.path.join(AppConfig.ORIGINAL_MASKS, mask_file),
-                    os.path.join(AppConfig.CONSUMER_MASK_IMAGES, mask_file))
+                    os.path.join(cons_mask_pill_dir, mask_file))
                 
             return {
                 "status": "success"
@@ -130,13 +149,19 @@ class StreamImage():
                 for img_file in image_files:
                     mask_file = img_file
                     if mask_file in mask_files:
-                        image_mask_pairs.append((img_file, mask_file))
+                        pill_name = self.extract_pill_name(img_file)
+                        original_img_path = os.path.join(paths["images"], pill_name, img_file)
+                        original_mask_path = os.path.join(paths["masks"], pill_name, mask_file)
+                        
+                        if os.path.exists(original_img_path) and os.path.exists(original_mask_path):
+                            image_mask_pairs.append((img_file, mask_file))
                         
                 bg_color = (145, 145, 151)
                 
                 for img_file, mask_file in image_mask_pairs:
-                    img_path = os.path.join(paths["images"], img_file)
-                    mask_path = os.path.join(paths["masks"], mask_file)
+                    pill_name = self.extract_pill_name(img_file)
+                    img_path = os.path.join(paths["images"], pill_name, img_file)
+                    mask_path = os.path.join(paths["masks"], pill_name, mask_file)
                     
                     image = cv2.imread(img_path)
                     mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
@@ -156,7 +181,8 @@ class StreamImage():
                     output_image = cv2.add(foreground, background)
                     
                     output_dir = AppConfig.CONSUMER_IMAGES_WO_BG if mode == "consumer" else AppConfig.REFERENCE_IMAGES_WO_BG
-                    output_path = os.path.join(output_dir, img_file)
+                    output_pill_dir = self.ensure_pill_directory(output_dir, img_file)
+                    output_path = os.path.join(output_pill_dir, img_file)
                     cv2.imwrite(output_path, output_image)
             
             return {"status": "success"}
@@ -199,8 +225,21 @@ class StreamImage():
             )
         
     def load_files(self, dir1: str, dir2: str, ext1: str, ext2: str) -> Tuple[List[str], List[str]]:
-        files1 = sorted([os.path.join(dir1, f) for f in os.listdir(dir1) if f.endswith(ext1)])
-        files2 = sorted([os.path.join(dir2, f) for f in os.listdir(dir2) if f.endswith(ext2)])
+        files1 = []
+        files2 = []
+        
+        for root, _, filenames in os.walk(dir1):
+            for f in filenames:
+                if f.endswith(ext1):
+                    files1.append(os.path.join(root, f))
+        
+        for root, _, filenames in os.walk(dir2):
+            for f in filenames:
+                if f.endswith(ext2):
+                    files2.append(os.path.join(root, f))
+        
+        files1 = sorted(files1)
+        files2 = sorted(files2)
         
         if len(files1) != len(files2):
             self.is_processing = False
@@ -243,7 +282,8 @@ class StreamImage():
     def process_image(self, image_paths: Tuple[str, str], rgb_path: str) -> None:
         color_path, mask_path = image_paths
         output_name = os.path.basename(color_path)
-        output_file = os.path.join(rgb_path, output_name)
+        output_pill_dir = self.ensure_pill_directory(rgb_path, output_name)
+        output_file = os.path.join(output_pill_dir, output_name)
         color_img = cv2.imread(str(color_path), 1)
         mask_img = cv2.imread(str(mask_path), 0)
         self.draw_bounding_box(color_img, mask_img, output_file)
@@ -300,11 +340,17 @@ class StreamImage():
             )
         
     def save_contour_images(self, rgb_path: str, contour_path: str) -> None:
-        rgb_images = [os.path.join(rgb_path, f) 
-                     for f in os.listdir(rgb_path) if f.endswith(".jpg")]
-        args_list = [(cv2.imread(img_path, 0), 
-             os.path.join(contour_path, os.path.basename(img_path)))
-            for img_path in rgb_images]
+        args_list = []
+        for root, _, filenames in os.walk(rgb_path):
+            for img_file in filenames:
+                if img_file.endswith(".jpg"):
+                    img_path = os.path.join(root, img_file)
+                    pill_name = self.extract_pill_name(img_file)
+                    contour_pill_dir = os.path.join(contour_path, pill_name)
+                    os.makedirs(contour_pill_dir, exist_ok=True)
+                    output_path = os.path.join(contour_pill_dir, img_file)
+                    
+                    args_list.append((cv2.imread(img_path, 0), output_path))
         
         self.total = len(args_list)
         self.processed = 0
@@ -325,11 +371,17 @@ class StreamImage():
         self.progress = int((self.processed / self.total) * 100)
         
     def save_texture_images(self, rgb_path: str, texture_path: str) -> None:
-        rgb_images = [os.path.join(rgb_path, f) 
-                     for f in os.listdir(rgb_path) if f.endswith(".jpg")]
-        args_list = [(cv2.imread(img_path, 0), 
-             os.path.join(texture_path, os.path.basename(img_path)))
-            for img_path in rgb_images]
+        args_list = []
+        for root, _, filenames in os.walk(rgb_path):
+            for img_file in filenames:
+                if img_file.endswith(".jpg"):
+                    img_path = os.path.join(root, img_file)
+                    pill_name = self.extract_pill_name(img_file)
+                    texture_pill_dir = os.path.join(texture_path, pill_name)
+                    os.makedirs(texture_pill_dir, exist_ok=True)
+                    output_path = os.path.join(texture_pill_dir, img_file)
+                    
+                    args_list.append((cv2.imread(img_path, 0), output_path))
         
         self.total = len(args_list)
         self.processed = 0
@@ -349,11 +401,17 @@ class StreamImage():
         self.progress = int((self.processed / self.total) * 100)
         
     def save_lbp_images(self, rgb_path: str, lbp_path: str) -> None:
-        rgb_images = [os.path.join(rgb_path, f) 
-                     for f in os.listdir(rgb_path) if f.endswith(".jpg")]
-        args_list = [(cv2.imread(img_path, 0), 
-                     os.path.join(lbp_path, f"lbp_{os.path.basename(img_path)}"))
-                    for img_path in rgb_images]
+        args_list = []
+        for root, _, filenames in os.walk(rgb_path):
+            for img_file in filenames:
+                if img_file.endswith(".jpg"):
+                    img_path = os.path.join(root, img_file)
+                    pill_name = self.extract_pill_name(img_file)
+                    lbp_pill_dir = os.path.join(lbp_path, pill_name)
+                    os.makedirs(lbp_pill_dir, exist_ok=True)
+                    output_path = os.path.join(lbp_pill_dir, f"lbp_{img_file}")
+                    
+                    args_list.append((cv2.imread(img_path, 0), output_path))
         
         self.total = len(args_list)
         self.processed = 0
@@ -428,41 +486,23 @@ class StreamImage():
         try:
             paths = self.path_selector(self.selected_mode)
             
-            if os.path.exists(paths["rgb"]):
-                for file in os.listdir(paths["rgb"]):
-                    file_path = os.path.join(paths["rgb"], file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        logger.error(f"Failed to delete {file_path}: {str(e)}")
-            
-            if os.path.exists(paths["contour"]):
-                for file in os.listdir(paths["contour"]):
-                    file_path = os.path.join(paths["contour"], file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        logger.error(f"Failed to delete {file_path}: {str(e)}")
-            
-            if os.path.exists(paths["texture"]):
-                for file in os.listdir(paths["texture"]):
-                    file_path = os.path.join(paths["texture"], file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        logger.error(f"Failed to delete {file_path}: {str(e)}")
-            
-            if os.path.exists(paths["lbp"]):
-                for file in os.listdir(paths["lbp"]):
-                    file_path = os.path.join(paths["lbp"], file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        logger.error(f"Failed to delete {file_path}: {str(e)}")
+            for output_type in ["rgb", "contour", "texture", "lbp"]:
+                if os.path.exists(paths[output_type]):
+                    for root, dirs, files in os.walk(paths[output_type]):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            try:
+                                if os.path.isfile(file_path):
+                                    os.unlink(file_path)
+                            except Exception as e:
+                                logger.error(f"Failed to delete {file_path}: {str(e)}")
+                        for dir in dirs:
+                            dir_path = os.path.join(root, dir)
+                            try:
+                                if os.path.isdir(dir_path) and not os.listdir(dir_path):
+                                    os.rmdir(dir_path)
+                            except Exception as e:
+                                logger.error(f"Failed to delete directory {dir_path}: {str(e)}")
                         
             logger.info(f"Cleared output directories for {self.selected_mode} mode")
             

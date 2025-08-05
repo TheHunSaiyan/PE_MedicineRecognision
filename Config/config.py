@@ -47,4 +47,8 @@ class AppConfig:
     K_FOLD_TRAIN = "Data/Train"
     K_FOLD_TEST = "Data/Test"
     REMAPED_ANNOTATION = "Data/Remap"
+    K_FOLD_TRAIN_ANCHOR = "Data/Train/Anchor"
+    K_FOLD_TRAIN_POSNEG = "Data/Train/Pos_Neg"
+    K_FOLD_TEST_REF = "Data/Test/Ref"
+    K_FOLD_TEST_QUERY = "Data/Test/Query"
     

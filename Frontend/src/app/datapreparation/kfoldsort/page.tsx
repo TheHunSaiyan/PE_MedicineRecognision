@@ -26,6 +26,7 @@ const [progressInfo, setProgressInfo] = useState({
     total: 0
   });
 const [snackbarOpen, setSnackbarOpen] = useState(false);
+const [foldDataLoaded, setFoldDataLoaded] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -48,8 +49,9 @@ const [snackbarOpen, setSnackbarOpen] = useState(false);
   }, [isProcessing]);
 
 const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setfoldMode(event.target.value);
-    };
+    setfoldMode(event.target.value);
+    setFoldDataLoaded(false);
+  };
 
 const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     let newNumber = Number(event.target.value);
@@ -59,10 +61,49 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (parseInt(selectedFold.replace('fold', '')) > newNumber) {
       setSelectedFold('fold1');
     }
+    setFoldDataLoaded(false);
   };
 
   const handleFoldChange = (event: any) => {
     setSelectedFold(event.target.value);
+  };
+
+   const getFold = async () => {
+    if (foldMode === '') {
+      setError(`You must choose a fold mode!`);
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+    setFoldDataLoaded(false);
+
+    try {
+      const response = await fetch('http://localhost:2076/get_fold', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          load: foldMode === 'exists',
+          num_folds: foldNumber
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get fold data');
+      }
+
+      const data = await response.json();
+      setfoldNumber(data.num_folds)
+      
+      setFoldDataLoaded(true);
+    } catch (err) {
+      setIsProcessing(false);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const foldOptions = Array.from({ length: foldNumber }, (_, i) => `fold${i + 1}`);
@@ -133,7 +174,7 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
          <FormControlLabel
              control={
                <Radio
-                 checked={foldMode === 'exist'}
+                 checked={foldMode === 'exists'}
                  onChange={handleModeChange}
                  value="exists"
                  name="fold"
@@ -168,28 +209,34 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
             error={foldNumber < 1 || foldNumber > 10}
             helperText={foldNumber < 1 || foldNumber > 10 ? "Must be between 1 and 10" : ""}
           />
+          <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={getFold}
+                style={{ marginTop: '20px' }}
+                disabled={isProcessing && foldMode==''}
+              >
+                {isProcessing ? 'Processing...' : 'Fold Load/Generate'}
+              </Button>
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>Select Fold</InputLabel>
             <Select
               value={selectedFold}
               label="Select Fold"
               onChange={handleFoldChange}
+              disabled={!foldDataLoaded || isProcessing}
             >
               {foldOptions.map((fold) => (
                 <MenuItem key={fold} value={fold}>{fold}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          <FormControlLabel
-                control={<Checkbox/>}
-                label="Erase existing folds"
-              />
             <Button 
                 variant="contained" 
                 color="primary" 
                 onClick={startSorting}
                 style={{ marginTop: '20px' }}
-                disabled={isProcessing && foldMode==''}
+                disabled={!foldDataLoaded || isProcessing}
               >
                 {isProcessing ? 'Processing...' : 'Start'}
               </Button>

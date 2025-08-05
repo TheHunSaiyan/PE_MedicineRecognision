@@ -27,12 +27,28 @@ class KFoldSort:
         self.train_output_dir = AppConfig.K_FOLD_TRAIN
         self.test_output_dir = AppConfig.K_FOLD_TEST
         self.subfolders = ["rgb", "texture", "contour", "lbp"]
+        
+    async def get_fold(self, data: Dict):
+        load = data.get("load", False)
+        num_folds = int(data.get("num_folds", 5))
+        
+        if not load:
+            self.kfold_data = self.generate_folds(num_folds)
+            logger.info(f"Generated {num_folds} new folds")
+        else:
+            self.kfold_data = self.load_folds()
+            num_folds = len(self.kfold_data)
+            logger.info(f"Loaded {num_folds} existing folds")
+            
+        return {
+            "num_folds": num_folds,
+            "status": "success",
+            "message": "Folds loaded/generated successfully"
+        }
 
     def start_sorting(self, data: Dict):
-        mode = data.get("mode")
-        num_folds = int(data.get("num_folds", 5))
         selected_fold = data.get("selected_fold", "fold1")
-        erase = data.get("erase", False)
+        erase = True
 
         logger.info("Starting sort...")
 
@@ -47,42 +63,46 @@ class KFoldSort:
         if erase:
             self.erase_existing()
 
-        if mode == "new":
-            self.kfold_data = self.generate_folds(num_folds)
-        elif mode == "exists":
-            self.kfold_data = self.load_folds()
-        else:
-            logger.error("Invalid mode.")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Invalid mode."
-            )
-
         if selected_fold not in self.kfold_data:
-            logger.error("Selected fold '{selected_fold}' not found.")
+            logger.error(f"Selected fold '{selected_fold}' not found.")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Selected fold '{selected_fold}' not found."
             )
             
+        test_classes = self.kfold_data[selected_fold]
         train_classes = [
-            cls
-            for fold_name, class_list in self.kfold_data.items()
+            cls 
+            for fold_name, class_list in self.kfold_data.items() 
             if fold_name != selected_fold
             for cls in class_list
         ]
-        test_classes = self.kfold_data[selected_fold]
         all_classes = list(set(train_classes + test_classes))
 
         with self.lock:
-            self.progress["total"] = len(all_classes) * len(self.subfolders)
+            self.progress["total"] = len(all_classes) * len(self.subfolders) * 2
 
         for class_name in all_classes:
             is_test = class_name in test_classes
-            self.copy_class_images(class_name, test=is_test)
+            
+            self.copy_class_images(
+                class_name, 
+                test=is_test,
+                source_dir=AppConfig.CONSUMER_STREAM_IMAGES,
+                test_dest=AppConfig.K_FOLD_TEST_QUERY,
+                train_dest=AppConfig.K_FOLD_TRAIN_ANCHOR
+            )
+            
+            self.copy_class_images(
+                class_name, 
+                test=is_test,
+                source_dir=AppConfig.REFERENCE_STREAM_IMAGES,
+                test_dest=AppConfig.K_FOLD_TEST_REF,
+                train_dest=AppConfig.K_FOLD_TRAIN_POSNEG
+            )
 
             with self.lock:
-                self.progress["processed"] += len(self.subfolders)
+                self.progress["processed"] += len(self.subfolders) * 2
                 self.progress["progress"] = int((self.progress["processed"] / self.progress["total"]) * 100)
 
         with self.lock:
@@ -149,11 +169,11 @@ class KFoldSort:
                     shutil.rmtree(full_path)
                 os.makedirs(full_path, exist_ok=True)
 
-    def copy_class_images(self, class_name: str, test: bool = False):
-        dst_root = self.test_output_dir if test else self.train_output_dir
+    def copy_class_images(self, class_name: str, test: bool, source_dir: str, test_dest: str, train_dest: str):
+        dst_root = test_dest if test else train_dest
 
         for sub in self.subfolders:
-            src_subfolder = os.path.join(self.source_dir, sub)
+            src_subfolder = os.path.join(source_dir, sub)
             dst_class_folder = os.path.join(dst_root, sub, class_name)
 
             if not os.path.exists(src_subfolder):
