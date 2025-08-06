@@ -19,10 +19,14 @@ RUN pip3 install qrcode pillow
 RUN pip3 install pyserial
 RUN pip3 install scikit-image
 RUN pip3 install tqdm
+RUN pip3 install ultralytics
 
 
 COPY . .
 
 RUN mkdir -p /app/Data/CapturedImages /app/Data/CalibrationImages /app/Data/UndistortedImages
+
+RUN mkdir -p /app/.ultralytics && chmod 777 /app/.ultralytics
+ENV YOLO_CONFIG_DIR=/app/.ultralytics
 
 CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "2076"]

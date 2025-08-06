@@ -51,4 +51,10 @@ class AppConfig:
     K_FOLD_TRAIN_POSNEG = "Data/Train/Pos_Neg"
     K_FOLD_TEST_REF = "Data/Test/Ref"
     K_FOLD_TEST_QUERY = "Data/Test/Query"
+    RECIPES = "Data/Recipes"
+    THUMBNAILS = "Data/Thumbnail"
+    ENVIRONMENT_IMAGES = "Data/Environment_Images"
+    VERIF_IMAGES = "Data/Verif_Images"
+    ENVIRONMENT_WEIGHTS = "Data/Environment_Weights"
+    GEOMETRY_COORDS = "Data/Geometry_Coords"
     

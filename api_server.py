@@ -33,6 +33,7 @@ from DataPreparation.AugmentImage.augment_image import AugmentImage
 from DataPreparation.StreamImage.stream_image import StreamImage
 from DataPreparation.KFoldSort.kfoldsort import KFoldSort
 from DataPreparation.RemapAnnotation.remapannotation import RemapAnnotation
+from DispenseVerification.dispenseverification import DispenseVerification
 
 class APIServer:
     def __init__(self):
@@ -51,6 +52,7 @@ class APIServer:
         self.stream_image = StreamImage()
         self.kfoldsort = KFoldSort()
         self.remapannotation = RemapAnnotation()
+        self.dispenseverification = DispenseVerification(self.camera, self.led)
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -214,6 +216,14 @@ class APIServer:
         @self.app.get("/get_remap_annotation_progress")
         async def get_progress():
             return await self.remapannotation.get_progress()
+        
+        @self.app.post("/initialization")
+        async def initialization():
+            return await self.dispenseverification.initialization()
+        
+        @self.app.post("/check_environment")
+        async def verify_check_environment(data: Dict[str, Any]):
+            return await self.dispenseverification.check_environment(data.get("holder_id", ""))
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

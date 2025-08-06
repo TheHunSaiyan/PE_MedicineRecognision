@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import Table from '@mui/material/Table';
@@ -10,324 +10,437 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
-import { Box, Checkbox, FormControlLabel, Typography } from '@mui/material';
+import { Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 
 const CameraApp: React.FC = () => {
+const [language, setLanguage] = useState('hu');
+const [isInitializing, setIsInitializing] = useState(true);
+const [initializationError, setInitializationError] = useState<string | null>(null);
+const [environmentStatus, setEnvironmentStatus] = useState<boolean | null>(null);
+const [environmentMessage, setEnvironmentMessage] = useState<string>('');
+const [isCheckingEnvironment, setIsCheckingEnvironment] = useState(false);
 
+const translations = {
+    en: {
+      title: "Pill Dispense Verification",
+      checkEnvironment: "Check Environment",
+      selectRecipe: "Select Recipe",
+      status: "Status:",
+      recipe: "Recipe",
+      recipeLabel: "Recipe",
+      predictionLabel: "Prediction",
+      morning: "Morning",
+      noon: "Noon",
+      night: "Night",
+      midnight: "Midnight",
+      pillName: "Pill Name",
+      count: "Count",
+      referenceImage: "Reference Image",
+      result: "Result: -",
+      verifyDispense: "Verify Dispense",
+      mainPage: "Main Page",
+      language: "Language",
+      initializing: "Initializing...",
+      initializationError: "Error during incicialization!"
+    },
+    hu: {
+      title: "Gyógyszeradagolás ellenőrzése",
+      checkEnvironment: "Munkaterület ellenőrzése",
+      selectRecipe: "Recept kiválasztása",
+      status: "Állapot",
+      recipe: "Recept",
+      recipeLabel: "Recept",
+      predictionLabel: "Előrejelzés",
+      morning: "Reggel",
+      noon: "Délben",
+      night: "Este",
+      midnight: "Éjfél",
+      pillName: "Gyógyszer neve",
+      count: "Darabszám",
+      referenceImage: "Referenciakép",
+      result: "Eredmény: -",
+      verifyDispense: "Adagolás ellenőrzése",
+      mainPage: "Főmenü",
+      language: "Nyelv",
+      initializing: "Inicializálás...",
+      initializationError: "Hiba inicianilázás közben!"
+    }
+  };
+
+  const t = translations[language as keyof typeof translations];
+
+  const handleLanguageChange = (event: any) => {
+    setLanguage(event.target.value);
+  };
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        setIsInitializing(true);
+        setInitializationError(null);
+        
+        const response = await fetch('http://localhost:2076/initialization', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Initialization failed with status ${response.status}`);
+        }
+
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setInitializationError(error instanceof Error ? error.message : 'Initialization failed');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  const checkEnvironment = async () => {
+    try {
+      setIsCheckingEnvironment(true);
+      setEnvironmentMessage('');
+      
+      const response = await fetch('http://localhost:2076/check_environment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          holder_id: "123456789"
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Environment check failed');
+      }
+
+      setEnvironmentStatus(data.status);
+      setEnvironmentMessage(data.message);
+    } catch (error) {
+      console.error('Environment check error:', error);
+      setEnvironmentStatus(false);
+      setEnvironmentMessage(error instanceof Error ? error.message : 'Environment check failed');
+    } finally {
+      setIsCheckingEnvironment(false);
+    }
+  };
+
+  if (isInitializing) {
+    return (
+      <div className="camera-container" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '24px'
+      }}>
+        {t.initializing}
+      </div>
+    );
+  }
+
+  if (initializationError) {
+    return (
+      <div className="camera-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        gap: '20px'
+      }}>
+        <div style={{ fontSize: '24px', color: 'red' }}>{t.initializationError}</div>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+        >
+          {language === 'hu' ? 'Frissítés' : 'Refresh'}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="camera-container" style={{
-        position: 'absolute', left: '50%', top: '50%',
-        transform: 'translate(-50%, -50%)'
+      padding: '20px',
+      width: '100vw',
+      boxSizing: 'border-box',
+      minHeight: '100vh',
+      position: 'relative'
     }}>
-    <div style={{ textAlign: 'center', marginBottom: '20px'}}>
-      <h1 style={{ fontSize:'40px' }}>Pill Dispense Verification</h1>
+      <div style={{ position: 'absolute', right: '20px', top: '20px' }}>
+        <FormControl size="small" variant="outlined">
+          <InputLabel>{t.language}</InputLabel>
+          <Select
+            value={language}
+            onChange={handleLanguageChange}
+            label="Language"
+            style={{ minWidth: '120px' }}
+          >
+            <MenuItem value="en">🇺🇸 EN</MenuItem>
+            <MenuItem value="hu">🇭🇺 HU</MenuItem>
+          </Select>
+        </FormControl>
       </div>
-      <div style={{ flex: '1 1 33%' }}>
-         <Button variant="contained" style={{marginBottom: '20px'}}>
-            Check Enviroment
+      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <h1 style={{ fontSize: '40px', margin: 0 }}>{t.title}</h1>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px', gap: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Button 
+          variant="contained" 
+          onClick={checkEnvironment} 
+          disabled={isCheckingEnvironment}>
+            {isCheckingEnvironment ? 
+              (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
+              t.checkEnvironment}
           </Button>
           <FormControlLabel
-                            style={{marginLeft: '30px'}}
-                            control={<Checkbox checked={false} disabled />}
-                            sx={{
-                              '& .MuiSvgIcon-root': {
-                                color: false ? '#04e762' : '#ef233c' ,
-                                fontSize: 28,
-                              },
-                            }}
-                            label={
-                              <span style={{
-                                color: false ? '#04e762' : '#ef233c',
-                                fontWeight: 'bold'
-                              }}>
-                                Status
-                              </span>
-                            }
-                          />
-          <br></br>
-           <Button variant="contained">
-            Select Recipe
-          </Button>
-          <FormControlLabel
-                            style={{marginLeft: '30px'}}
-                            control={<Checkbox checked={false} disabled />}
-                            sx={{
-                              '& .MuiSvgIcon-root': {
-                                color: false ? '#04e762' : '#ef233c' ,
-                                fontSize: 28,
-                              },
-                            }}
-                            label={
-                              <span style={{
-                                color: false ? '#04e762' : '#ef233c',
-                                fontWeight: 'bold'
-                              }}>
-                                Recipe
-                              </span>
-                            }
-                          />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center'}}>
-        <Box sx={{ margin: '20px', maxWidth: '800px' }}>
-  <Typography  
-    variant='h6'
-    gutterBottom
-  >
-    Morning
-  </Typography>
-      <div style={{display: 'flex', justifyContent: 'center'}}>
-        <Typography  
-    gutterBottom
-  >
-    Recipe
-  </Typography>
-      <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Typography  
-    gutterBottom
-  >
-    Prediction
-  </Typography>
-    <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    </div>
-    </Box>
-    <Box sx={{ margin: '20px', maxWidth: '800px' }}>
-  <Typography  
-    variant='h6'
-    gutterBottom
-  >
-    Noon
-  </Typography>
-      <div style={{display: 'flex', justifyContent: 'center'}}>
-        <Typography  
-    gutterBottom
-  >
-    Recipe
-  </Typography>
-      <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Typography  
-    gutterBottom
-  >
-    Prediction
-  </Typography>
-    <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    </div>
-    </Box>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center'}}>
-      <Box sx={{ margin: '20px', maxWidth: '800px' }}>
-  <Typography  
-    variant='h6'
-    gutterBottom
-  >
-    Night
-  </Typography>
-      <div style={{display: 'flex', justifyContent: 'center'}}>
-        <Typography  
-    gutterBottom
-  >
-    Recipe
-  </Typography>
-      <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Typography  
-    gutterBottom
-  >
-    Prediction
-  </Typography>
-    <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    </div>
-    </Box>
-    <Box sx={{ margin: '20px', maxWidth: '800px' }}>
-  <Typography  
-    variant='h6'
-    gutterBottom
-  >
-    Midnight
-  </Typography>
-      <div style={{display: 'flex', justifyContent: 'center'}}>
-        <Typography  
-    gutterBottom
-  >
-    Recipe
-  </Typography>
-      <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Typography  
-    gutterBottom
-  >
-    Prediction
-  </Typography>
-    <TableContainer component={Paper} style={{minHeight: '250px', maxWidth: '300px', margin: '20px'}}>
-      <Table sx={{ minWidth: 650 }} aria-label="simple table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Pill Name</TableCell>
-            <TableCell align="right">Count</TableCell>
-            <TableCell align="right">Reference Image</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-            <TableRow
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-            >
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-              <TableCell align="right"></TableCell>
-            </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-    </div>
-    </Box>
-      </div>
-      <div style={{ flex: '1 1 33%' }}></div>
-        <div style={{
-        position: 'absolute',
-        left: '20px',
-        bottom: '20px'
-      }}>
-        <Button variant="contained" style={{marginBottom: '20px'}}>
-            Verify Dispense
-          </Button>
-          <br></br>
-        <Link href="/" passHref>
-          <Button variant="contained">
-            Main Page
-          </Button>
-        </Link>
+            control={<Checkbox checked={false} disabled />}
+            sx={{
+              '& .MuiSvgIcon-root': {
+                color: false ? '#04e762' : '#ef233c',
+                fontSize: 28,
+              },
+            }}
+            label={
+              <span style={{
+                color: false ? '#04e762' : '#ef233c',
+                fontWeight: 'bold'
+              }}>
+                {t.status}
+              </span>
+            }
+          />
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Button variant="contained">{t.selectRecipe}</Button>
+          <FormControlLabel
+            control={<Checkbox checked={false} disabled />}
+            sx={{
+              '& .MuiSvgIcon-root': {
+                color: false ? '#04e762' : '#ef233c',
+                fontSize: 28,
+              },
+            }}
+            label={
+              <span style={{
+                color: false ? '#04e762' : '#ef233c',
+                fontWeight: 'bold'
+              }}>
+                {t.recipe}
+              </span>
+            }
+          />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <Box>
+          <Typography variant='h6' gutterBottom>{t.morning}</Typography>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <Typography>{t.recipeLabel}</Typography>
+            <Typography>{t.predictionLabel}</Typography>
+          </div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>
+          <Typography gutterBottom>{t.result}</Typography>
+        </Box>
+        <Box>
+          <Typography variant='h6' gutterBottom>{t.noon}</Typography>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <Typography>{t.recipeLabel}</Typography>
+            <Typography>{t.predictionLabel}</Typography>
+          </div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>
+          <Typography gutterBottom>{t.result}</Typography>
+        </Box>
+        <Box>
+          <Typography variant='h6' gutterBottom>{t.night}</Typography>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <Typography>{t.recipeLabel}</Typography>
+            <Typography>{t.predictionLabel}</Typography>
+          </div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>
+          <Typography gutterBottom>{t.result}</Typography>
+        </Box>
+        <Box>
+          <Typography variant='h6' gutterBottom>{t.midnight}</Typography>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <Typography>{t.recipeLabel}</Typography>
+            <Typography>{t.predictionLabel}</Typography>
+          </div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t.pillName}</TableCell>
+                    <TableCell align="right">{t.count}</TableCell>
+                    <TableCell align="right">{t.referenceImage}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                    <TableCell align="right"></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </div>
+          <Typography gutterBottom>{t.result}</Typography>
+        </Box>
+      </div>
+      <div style={{
+        position: 'fixed',
+        left: '20px',
+        bottom: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
+        <Button variant="contained">{t.verifyDispense}</Button>
+        <Link href="/" passHref>
+          <Button variant="contained">{t.mainPage}</Button>
+        </Link>
+      </div>
     </div>
   );
 };
