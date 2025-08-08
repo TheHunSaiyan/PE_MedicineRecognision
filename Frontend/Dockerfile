@@ -3,9 +3,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
-RUN npm install @mui/material @emotion/react @emotion/styled react-select
-RUN npm install notistack
+RUN npm install && \
+    npm install @mui/material @emotion/react @emotion/styled react-select && \
+    npm install notistack
 
 COPY . .
 

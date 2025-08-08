@@ -22,6 +22,8 @@ from Controllers.led_controller import LEDController
 from Models.led_parameters import LEDParameters
 from Models.camera_parameters import CameraParameters
 from Models.camera_calibration_parameters import CameraCalibrationParameters
+from Models.user import User
+from Models.roles import Role
 from Config.config import AppConfig
 
 from ImageCapture.CameraSettings.camera_settings import CameraSettings
@@ -34,6 +36,8 @@ from DataPreparation.StreamImage.stream_image import StreamImage
 from DataPreparation.KFoldSort.kfoldsort import KFoldSort
 from DataPreparation.RemapAnnotation.remapannotation import RemapAnnotation
 from DispenseVerification.dispenseverification import DispenseVerification
+from Database.database import Database
+from Manager.user_manager import UserManager
 
 class APIServer:
     def __init__(self):
@@ -53,6 +57,8 @@ class APIServer:
         self.kfoldsort = KFoldSort()
         self.remapannotation = RemapAnnotation()
         self.dispenseverification = DispenseVerification(self.camera, self.led)
+        self.database = Database()
+        self.user_manager = UserManager(self.database)
 
     def setup_middleware(self):
         self.app.add_middleware(
@@ -224,6 +230,10 @@ class APIServer:
         @self.app.post("/check_environment")
         async def verify_check_environment(data: Dict[str, Any]):
             return await self.dispenseverification.check_environment(data.get("holder_id", ""))
+        
+        @self.app.post("/attempt_login")
+        async def attempt_login(data: Dict[str, Any]):
+            return await self.user_manager.login(data)
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

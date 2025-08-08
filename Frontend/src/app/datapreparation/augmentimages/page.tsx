@@ -7,6 +7,7 @@ import Link from 'next/link';
 import InputAdornment from '@mui/material/InputAdornment';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
 import LinearProgress from '@mui/material/LinearProgress';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -244,6 +245,7 @@ const stopAugmentation = async () => {
 
 
 return (
+  <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
         <div style={{ flex: '1 1 33%' }}>
         <h1>Data availability check:</h1>
@@ -516,6 +518,7 @@ return (
         </AlertComponent>
       </Snackbar>
     </div>
+    </ProtectedRoute>
 );
 
 };

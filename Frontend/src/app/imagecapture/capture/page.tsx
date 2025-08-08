@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Select from 'react-select'
 import {Snackbar, FormControlLabel, Radio} from '@mui/material';
 import Alert from '@mui/material/Alert';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 interface Medication {
   id: number;
@@ -223,6 +224,7 @@ const formatMedicationName = (name: string): string => {
 }, 2000);
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
       <div>
@@ -408,6 +410,7 @@ const formatMedicationName = (name: string): string => {
   </Alert>
 </Snackbar>
     </div>
+    </ProtectedRoute>
   );
 };
 

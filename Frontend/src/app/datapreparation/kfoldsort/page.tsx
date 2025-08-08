@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {Button, Paper, FormControlLabel, Radio, TextField, FormControl, InputLabel, Select, MenuItem, Checkbox, LinearProgress, Typography, Snackbar} from '@mui/material';
 import Link from 'next/link';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -151,6 +152,7 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
 
     return (
+      <ProtectedRoute>
     <div className="camera-container" style={{
         position: 'absolute', left: '50%', top: '50%',
         transform: 'translate(-50%, -50%)'
@@ -284,6 +286,7 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
           </AlertComponent>
         </Snackbar>
     </div>
+    </ProtectedRoute>
   );
 
 };

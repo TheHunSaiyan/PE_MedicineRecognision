@@ -11,6 +11,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import { Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Typography } from '@mui/material';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 
 const CameraApp: React.FC = () => {
 const [language, setLanguage] = useState('hu');
@@ -169,6 +170,7 @@ const translations = {
   }
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{
       padding: '20px',
       width: '100vw',
@@ -437,11 +439,12 @@ const translations = {
         gap: '10px'
       }}>
         <Button variant="contained">{t.verifyDispense}</Button>
-        <Link href="/" passHref>
+        <Link href="/mainpage" passHref>
           <Button variant="contained">{t.mainPage}</Button>
         </Link>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

@@ -5,6 +5,7 @@ import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, S
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import LinearProgress from '@mui/material/LinearProgress';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 const CameraApp: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -101,6 +102,7 @@ const CameraApp: React.FC = () => {
   };
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
       <div style={{ 
         textAlign: 'center', 
@@ -165,6 +167,7 @@ const CameraApp: React.FC = () => {
         </Link>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

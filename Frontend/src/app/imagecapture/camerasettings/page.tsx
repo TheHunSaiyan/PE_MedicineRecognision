@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider, Radio} from '@mui/material';
 import Link from 'next/link';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 interface CameraParameters {
   brightness: number;
@@ -332,6 +333,7 @@ const sendLedUpdate = debounce(async (params: LedParameters) => {
 };
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{minHeight: '100vh', display: 'flex',
   flexDirection: 'column'}}>
     <Container maxWidth="xl" sx={{
@@ -707,6 +709,7 @@ const sendLedUpdate = debounce(async (params: LedParameters) => {
     </Grid>
     </Container>
     </div>
+    </ProtectedRoute>
   );
 };
 

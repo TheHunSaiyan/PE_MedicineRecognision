@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import { Typography, FormControlLabel, Radio } from '@mui/material';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 interface LedParameters{
   upper_led: number;
@@ -169,6 +170,7 @@ const formatTimestamp = (date: Date): string => {
 }, 2000);
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh'}}>
       <br></br>
       <div style={{alignItems: 'center', justifyContent: 'center', display: 'flex'}}>
@@ -328,6 +330,7 @@ const formatTimestamp = (date: Date): string => {
             </Button>
           </Link>
     </div>
+    </ProtectedRoute>
   );
 };
 

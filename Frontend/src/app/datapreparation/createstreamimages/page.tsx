@@ -7,6 +7,7 @@ import Link from 'next/link';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
 import { closeSnackbar, SnackbarProvider } from 'notistack';
 import { useSnackbar } from 'notistack';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -182,6 +183,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
     }, [isProcessing]);
 
   return(
+    <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
         <div style={{ flex: '1 1 33%' }}>
             <h1>Data availability check:</h1>
@@ -330,6 +332,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
         </Link>
         </div>
     </div>
+    </ProtectedRoute>
   );
 
 

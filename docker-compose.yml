@@ -15,6 +15,7 @@ services:
       - ./Controllers:/app/Controllers
       - ./Manager:/app/Manager
       - ./Models:/app/Models
+      - ./Database:/app/Database
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true

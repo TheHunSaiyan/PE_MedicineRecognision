@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 
 const CameraApp: React.FC = () => {
 
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{
         position: 'absolute', left: '50%', top: '50%',
         transform: 'translate(-50%, -50%)'
@@ -99,7 +101,7 @@ const CameraApp: React.FC = () => {
           Remap Annotation IDs
         </Button>
       </Link>
-      <Link href="/" passHref>
+      <Link href="/mainpage" passHref>
         <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
     width: {
       xs: '100%',
@@ -117,6 +119,7 @@ const CameraApp: React.FC = () => {
       </Link>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

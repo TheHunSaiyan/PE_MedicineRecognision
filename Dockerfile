@@ -20,6 +20,8 @@ RUN pip3 install pyserial
 RUN pip3 install scikit-image
 RUN pip3 install tqdm
 RUN pip3 install ultralytics
+RUN pip3 install passlib
+RUN pip3 install bcrypt
 
 
 COPY . .
