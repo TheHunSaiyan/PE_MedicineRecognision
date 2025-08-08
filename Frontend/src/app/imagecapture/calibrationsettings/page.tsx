@@ -5,6 +5,7 @@ import Button from '@mui/material/Button';
 import Link from 'next/link';
 import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
+import ProtectedRoute from '../../../../components/ProtectedRoute';
 
 interface CameraCalibrationParams {
   chess_row: number;
@@ -359,6 +360,7 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
 };
 
   return (
+    <ProtectedRoute>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
       <div style={{ flex: '1 1 33%' }}>
         <div>
@@ -569,6 +571,7 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
         </Button>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 
