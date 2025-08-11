@@ -5,7 +5,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install && \
     npm install @mui/material @emotion/react @emotion/styled react-select && \
-    npm install notistack
+    npm install @mui/icons-material && \
+    npm install notistack && \
+    npm install material-react-table
 
 COPY . .
 

@@ -149,15 +149,14 @@ class AugmentImage:
         shifted_mask = cv2.warpAffine(mask, matrix, (w, h), flags=cv2.INTER_NEAREST)
         return shifted_img, shifted_mask
     
-    def apply_zoom(self, image, mask):
-        h, w = image.shape[:2]
-        scale = random.uniform(1.1, 1.4)
-        new_h, new_w = int(h * scale), int(w * scale)
-        resized_img = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        resized_mask = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-        top = (new_h - h) // 2
-        left = (new_w - w) // 2
-        return resized_img[top:top + h, left:left + w], resized_mask[top:top + h, left:left + w]
+    def apply_noise(self, image):
+        mean = 0
+        var = random.uniform(0.001, 0.01)
+        sigma = var ** 0.5
+        gauss = np.random.normal(mean, sigma, image.shape) * 255
+        noisy = image + gauss
+        noisy = np.clip(noisy, 0, 255).astype(np.uint8)
+        return noisy
     
     def apply_background_change(self, image, mask):
         bg_files = sorted(glob.glob(os.path.join(self.backgrounds_path, "*.*")))
@@ -232,8 +231,19 @@ class AugmentImage:
             self.clear_output_directories()
             self._processed_files = 0
             self._total_files = 0
+            number_of_images = data.get("number_of_images", None)
             
-            for img_file, mask_file, ann_file, is_train in self.get_image_triplets(is_train=True):
+            train_triplets = list(self.get_image_triplets(is_train=True))
+            if number_of_images is not None and number_of_images > 0:
+                train_triplets = train_triplets[:number_of_images]
+                
+            val_triplets = list(self.get_image_triplets(is_train=False))
+            if number_of_images is not None and number_of_images > 0:
+                val_triplets = val_triplets[:number_of_images]
+                
+            self._total_files = len(train_triplets) + len(val_triplets)
+            
+            for img_file, mask_file, ann_file, is_train in train_triplets:
                 if self.stop:
                     logger.info("Augmentation stopped by user")
                     self.clear_output_directories()
@@ -256,8 +266,8 @@ class AugmentImage:
                     image, mask = self.apply_rotation(image, mask)
                 if data.get("shift"):
                     image, mask = self.apply_shift(image, mask)
-                if data.get("zoom"):
-                    image, mask = self.apply_zoom(image, mask)
+                if data.get("noise"):
+                    image = self.apply_noise(image)
                 if data.get("change_background"):
                     image = self.apply_background_change(image, mask)
                 if data.get("qr_code"):
@@ -267,7 +277,7 @@ class AugmentImage:
                              txt_file=ann_file, base_name=base_name, is_train=True)
                 self._processed_files += 1
                 
-            for img_file, mask_file, ann_file, is_train in self.get_image_triplets(is_train=False):
+            for img_file, mask_file, ann_file, is_train in val_triplets:
                 if self.stop:
                     logger.info("Augmentation stopped by user")
                     self.clear_output_directories()
@@ -290,8 +300,8 @@ class AugmentImage:
                     image, mask = self.apply_rotation(image, mask)
                 if data.get("shift"):
                     image, mask = self.apply_shift(image, mask)
-                if data.get("zoom"):
-                    image, mask = self.apply_zoom(image, mask)
+                if data.get("noise"):
+                    image = self.apply_noise(image)
                 if data.get("change_background"):
                     image = self.apply_background_change(image, mask)
                 if data.get("qr_code"):

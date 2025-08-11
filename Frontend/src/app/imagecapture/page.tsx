@@ -66,7 +66,7 @@ const CameraApp: React.FC = () => {
     borderRadius: '8px',
     boxShadow: 3
   }}>
-          Calibration Settings
+          Camera Calibration
         </Button>
       </Link>
       <br></br>

@@ -1,9 +1,9 @@
 {
-    "brightness": 8,
-    "contrast": 14,
+    "brightness": -30,
+    "contrast": 5,
     "saturation": 23,
     "white_balance_automatic": false,
-    "white_balance_temperature": 3200,
+    "white_balance_temperature": 4100,
     "sharpness": 2,
     "auto_exposure": 1,
     "exposure_time_absolute": 2901,

@@ -31,10 +31,11 @@ interface Augmentation {
     brightness: boolean;
     rotate: boolean;
     shift: boolean;
-    zoom: boolean;
+    noise: boolean;
     change_background: boolean;
     qr_code: boolean;
     augmentation_per_image: number;
+    number_of_images: number;
 }
 
 interface ProgressData {
@@ -63,10 +64,12 @@ const [availability, setAvailability] = useState<DataAvailability>({
     brightness: false,
     rotate: false,
     shift: false,
-    zoom: false,
+    noise: false,
     change_background: false,
     qr_code: true,
-    augmentation_per_image: 1
+    augmentation_per_image: 1,
+    number_of_images: 1
+    
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -419,11 +422,11 @@ return (
                          <br></br>
                          <FormControlLabel
                            control={<Checkbox 
-                             name="zoom"
-                             checked={augmentation.zoom}
+                             name="noise"
+                             checked={augmentation.noise}
                              onChange={handleAugmentationChange}
                            />}
-                           label="Zoom"
+                           label="Noise"
                          />
                          <br></br>
                          <FormControlLabel
@@ -457,6 +460,19 @@ return (
                              endAdornment: <InputAdornment position="end">times</InputAdornment>,
                            }}
                          />
+                         <TextField
+                              fullWidth
+                              margin="normal"
+                              label="Number of images to augment"
+                              name="number_of_images"
+                              type="number"
+                              value={augmentation.number_of_images}
+                              onChange={handleNumberChange}
+                              inputProps={{ min: 1 }}
+                              InputProps={{
+                                  endAdornment: <InputAdornment position="end">images</InputAdornment>,
+                              }}
+                          />
                          <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '20px', flexDirection: 'column' }}>
                            <Button 
                              variant="contained" 

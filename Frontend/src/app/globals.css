@@ -25,8 +25,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+h1, h2, h3, h4, h5, h6, span, p, div {
+  color: black;
+}
+
 .camera-container{
-  background: linear-gradient(180deg, #654ea3, #eaafc8);
+  background: linear-gradient(180deg, #f5ebe0, #faedcd);
   height: 100%;
   width: 100%;
 }

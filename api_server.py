@@ -234,6 +234,10 @@ class APIServer:
         @self.app.post("/attempt_login")
         async def attempt_login(data: Dict[str, Any]):
             return await self.user_manager.login(data)
+        
+        @self.app.get("/get_all_users")
+        async def get_all_users():
+            return await self.user_manager.get_all_users()
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

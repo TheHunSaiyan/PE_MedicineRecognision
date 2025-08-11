@@ -94,6 +94,48 @@ class Database:
                 role=Role(row[5])
             )
         return None
+    
+    async def get_all_users(self) -> list[User]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM users")
+        rows = cursor.fetchall()
+        return [
+            User(
+                user_id=row[0],
+                first_name=row[1],
+                last_name=row[2],
+                email=row[3],
+                hashed_password=row[4],
+                role=Role(row[5])
+            ) for row in rows
+        ]
+        
+    async def update_user(self, user: User):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE users 
+            SET first_name = ?, last_name = ?, email = ?, hashed_password = ?, role = ?
+            WHERE user_id = ?
+            """,
+            (
+                user.first_name,
+                user.last_name,
+                user.email,
+                user.hashed_password,
+                user.role.value,
+                user.user_id
+            )
+        )
+        self.conn.commit()
+    
+    async def delete_user(self, user_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "DELETE FROM users WHERE user_id = ?",
+            (user_id,)
+        )
+        self.conn.commit()
 
     def close(self):
         self.conn.close()

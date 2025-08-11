@@ -58,14 +58,14 @@ class CapturePill:
                     detail="No frame available"
                 )
 
-            filename = f"{next_image_number:04d}_{pill_name}_{lamp_position}_{pill_side}.png"
+            filename = f"{next_image_number:03d}_{pill_name}_{lamp_position[0]}_{pill_side[0]}.jpg"
             filepath = pill_dir / filename
             
-            cv2.imwrite(str(filepath), frame)
+            cv2.imwrite(str(filepath), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
             
             return {
                 "status": "success",
-                "filename": str(filepath.relative_to(AppConfig.CAPTURED_IMAGES_DIR)),
+                "filename": str(filename),
                 "image_number": next_image_number,
                 "full_path": str(filepath)
             }

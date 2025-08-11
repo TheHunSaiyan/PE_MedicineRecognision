@@ -80,6 +80,23 @@ const CameraApp: React.FC = () => {
           Dispense Verification
         </Button>
       </Link>
+      <br></br>
+      <Link href="/usermanagment" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          User Management
+        </Button>
+      </Link>
       </div>
     </div>
     </ProtectedRoute>

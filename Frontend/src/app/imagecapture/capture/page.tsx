@@ -253,6 +253,7 @@ const formatMedicationName = (name: string): string => {
                      onChange={handleLampChange}
                      value="upper_led"
                      name="lamp-selection"
+                     defaultChecked={true}
                    />
                  }
                  label="Upper Lamp"
@@ -275,6 +276,7 @@ const formatMedicationName = (name: string): string => {
                   onChange={handlePillSideChange}
                   value="topSide"
                   name="pillSideSelection"
+                  defaultChecked={true}
                 />
               }
               label="Top Side"

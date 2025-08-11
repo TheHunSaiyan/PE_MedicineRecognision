@@ -5,6 +5,7 @@ import Button from '@mui/material/Button';
 import Link from 'next/link';
 import { Typography, FormControlLabel, Radio } from '@mui/material';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { send } from 'process';
 
 interface LedParameters{
   upper_led: number;
@@ -24,8 +25,7 @@ const CameraApp: React.FC = () => {
   const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null);
   const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
   const [showLastImage, setShowLastImage] = useState(false);
-  const [selectedLamp, setSelectedLamp] = useState<'upper_led' | 'side_led' | 'none'>('none');
-  const [Parameters, setParameters] = useState<LedParameters>({
+  const [parameters, setParameters] = useState<LedParameters>({
     upper_led: 0,
     side_led: 0
   })
@@ -48,7 +48,10 @@ const handleHoldStart = () => {
           }
           const data = await response.json();
           console.log("Received data:", data); 
-          setParameters(data);
+          setParameters({
+          upper_led: data.upper_led,
+          side_led: 0
+        });
         } catch (error) {
           console.error('Error fetching settings:', error);
         } finally {
@@ -138,18 +141,11 @@ const formatTimestamp = (date: Date): string => {
 
   const toggleLiveFeed = () => {
     setIsLiveFeedActive(!isLiveFeedActive);
-  };
-
-  const handleLampChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const lamp = event.target.value as 'upper_led' | 'side_led' | 'none';
-    setSelectedLamp(lamp);
-
-    const params: LedParameters = {
-    upper_led: lamp === 'upper_led' ? Parameters.upper_led : 0,
-    side_led: lamp === 'side_led' ? Parameters.side_led : 0
-  };
-
-    sendLedUpdate(params);
+    if (isLiveFeedActive) {
+      sendLedUpdate(parameters);
+    } else {
+      sendLedUpdate({ upper_led: 0, side_led: 0 });
+    }
   };
 
   const sendLedUpdate = debounce(async (params: LedParameters) => {
@@ -286,42 +282,6 @@ const formatTimestamp = (date: Date): string => {
             </div>
           )}
         </div>
-      </div>
-      <br></br>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <FormControlLabel
-          control={
-            <Radio
-              checked={selectedLamp === 'upper_led'}
-              onChange={handleLampChange}
-              value="upper_led"
-              name="lamp-selection"
-            />
-          }
-          label="Upper Lamp"
-        />
-        <FormControlLabel
-          control={
-            <Radio
-              checked={selectedLamp === 'side_led'}
-              onChange={handleLampChange}
-              value="side_led"
-              name="lamp-selection"
-            />
-          }
-          label="Side Lamp"
-        />
-        <FormControlLabel
-          control={
-            <Radio
-              checked={selectedLamp === 'none'}
-              onChange={handleLampChange}
-              value="none"
-              name="lamp-selection"
-            />
-          }
-          label="None"
-        />
       </div>
       <br></br>
        <Link href="/imagecapture" passHref>

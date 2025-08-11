@@ -14,14 +14,14 @@ import { Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Sel
 import ProtectedRoute from '../../../components/ProtectedRoute';
 
 const CameraApp: React.FC = () => {
-const [language, setLanguage] = useState('hu');
-const [isInitializing, setIsInitializing] = useState(true);
-const [initializationError, setInitializationError] = useState<string | null>(null);
-const [environmentStatus, setEnvironmentStatus] = useState<boolean | null>(null);
-const [environmentMessage, setEnvironmentMessage] = useState<string>('');
-const [isCheckingEnvironment, setIsCheckingEnvironment] = useState(false);
+  const [language, setLanguage] = useState('hu');
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [environmentStatus, setEnvironmentStatus] = useState<boolean | null>(null);
+  const [environmentMessage, setEnvironmentMessage] = useState<string>('');
+  const [isCheckingEnvironment, setIsCheckingEnvironment] = useState(false);
 
-const translations = {
+  const translations = {
     en: {
       title: "Pill Dispense Verification",
       checkEnvironment: "Check Environment",
@@ -171,279 +171,288 @@ const translations = {
 
   return (
     <ProtectedRoute>
-    <div className="camera-container" style={{
-      padding: '20px',
-      width: '100vw',
-      boxSizing: 'border-box',
-      minHeight: '100vh',
-      position: 'relative'
-    }}>
-      <div style={{ position: 'absolute', right: '20px', top: '20px' }}>
-        <FormControl size="small" variant="outlined">
-          <InputLabel>{t.language}</InputLabel>
-          <Select
-            value={language}
-            onChange={handleLanguageChange}
-            label="Language"
-            style={{ minWidth: '120px' }}
-          >
-            <MenuItem value="en">🇺🇸 EN</MenuItem>
-            <MenuItem value="hu">🇭🇺 HU</MenuItem>
-          </Select>
-        </FormControl>
-      </div>
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '40px', margin: 0 }}>{t.title}</h1>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px', gap: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Button 
-          variant="contained" 
-          onClick={checkEnvironment} 
-          disabled={isCheckingEnvironment}>
-            {isCheckingEnvironment ? 
-              (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
-              t.checkEnvironment}
-          </Button>
-          <FormControlLabel
-            control={<Checkbox checked={false} disabled />}
-            sx={{
-              '& .MuiSvgIcon-root': {
-                color: false ? '#04e762' : '#ef233c',
-                fontSize: 28,
-              },
-            }}
-            label={
-              <span style={{
-                color: false ? '#04e762' : '#ef233c',
-                fontWeight: 'bold'
-              }}>
-                {t.status}
-              </span>
-            }
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Button variant="contained">{t.selectRecipe}</Button>
-          <FormControlLabel
-            control={<Checkbox checked={false} disabled />}
-            sx={{
-              '& .MuiSvgIcon-root': {
-                color: false ? '#04e762' : '#ef233c',
-                fontSize: 28,
-              },
-            }}
-            label={
-              <span style={{
-                color: false ? '#04e762' : '#ef233c',
-                fontWeight: 'bold'
-              }}>
-                {t.recipe}
-              </span>
-            }
-          />
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <Box>
-          <Typography variant='h6' gutterBottom>{t.morning}</Typography>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <Typography>{t.recipeLabel}</Typography>
-            <Typography>{t.predictionLabel}</Typography>
-          </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-          <Typography gutterBottom>{t.result}</Typography>
-        </Box>
-        <Box>
-          <Typography variant='h6' gutterBottom>{t.noon}</Typography>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <Typography>{t.recipeLabel}</Typography>
-            <Typography>{t.predictionLabel}</Typography>
-          </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-          <Typography gutterBottom>{t.result}</Typography>
-        </Box>
-        <Box>
-          <Typography variant='h6' gutterBottom>{t.night}</Typography>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <Typography>{t.recipeLabel}</Typography>
-            <Typography>{t.predictionLabel}</Typography>
-          </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-          <Typography gutterBottom>{t.result}</Typography>
-        </Box>
-        <Box>
-          <Typography variant='h6' gutterBottom>{t.midnight}</Typography>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <Typography>{t.recipeLabel}</Typography>
-            <Typography>{t.predictionLabel}</Typography>
-          </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TableContainer component={Paper} style={{ flex: 1, minHeight: '200px' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t.pillName}</TableCell>
-                    <TableCell align="right">{t.count}</TableCell>
-                    <TableCell align="right">{t.referenceImage}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-          <Typography gutterBottom>{t.result}</Typography>
-        </Box>
-      </div>
-      <div style={{
-        position: 'fixed',
-        left: '20px',
-        bottom: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px'
+      <div className="camera-container" style={{
+        padding: '20px',
+        width: '100vw',
+        boxSizing: 'border-box',
+        minHeight: '100vh',
+        position: 'relative'
       }}>
-        <Button variant="contained">{t.verifyDispense}</Button>
-        <Link href="/mainpage" passHref>
-          <Button variant="contained">{t.mainPage}</Button>
-        </Link>
+        <div style={{ position: 'absolute', right: '20px', top: '20px' }}>
+          <FormControl size="small" variant="outlined">
+            <InputLabel>{t.language}</InputLabel>
+            <Select
+              value={language}
+              onChange={handleLanguageChange}
+              label="Language"
+              style={{ minWidth: '120px' }}
+            >
+              <MenuItem value="en">🇺🇸 EN</MenuItem>
+              <MenuItem value="hu">🇭🇺 HU</MenuItem>
+            </Select>
+          </FormControl>
+        </div>
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1 style={{ fontSize: '40px', margin: 0 }}>{t.title}</h1>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Button 
+              variant="contained" 
+              onClick={checkEnvironment} 
+              disabled={isCheckingEnvironment}>
+              {isCheckingEnvironment ? 
+                (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
+                t.checkEnvironment}
+            </Button>
+            <FormControlLabel
+              control={<Checkbox checked={false} disabled />}
+              sx={{
+                '& .MuiSvgIcon-root': {
+                  color: false ? '#04e762' : '#ef233c',
+                  fontSize: 28,
+                },
+              }}
+              label={
+                <span style={{
+                  color: false ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  {t.status}
+                </span>
+              }
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Button variant="contained">{t.selectRecipe}</Button>
+            <FormControlLabel
+              control={<Checkbox checked={false} disabled />}
+              sx={{
+                '& .MuiSvgIcon-root': {
+                  color: false ? '#04e762' : '#ef233c',
+                  fontSize: 28,
+                },
+              }}
+              label={
+                <span style={{
+                  color: false ? '#04e762' : '#ef233c',
+                  fontWeight: 'bold'
+                }}>
+                  {t.recipe}
+                </span>
+              }
+            />
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+          <Box sx={{ gridColumn: '1' }}>
+            <Typography variant='h6' gutterBottom>{t.morning}</Typography>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.recipeLabel}</Typography>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+          </Box>
+          <Box sx={{ gridColumn: '2' }}>
+            <Typography variant='h6' gutterBottom>{t.noon}</Typography>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.recipeLabel}</Typography>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+          </Box>
+          <Box sx={{ gridColumn: '3' }}>
+            <Typography variant='h6' gutterBottom>{t.night}</Typography>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.recipeLabel}</Typography>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+          </Box>
+          <Box sx={{ gridColumn: '4' }}>
+            <Typography variant='h6' gutterBottom>{t.midnight}</Typography>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.recipeLabel}</Typography>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t.pillName}</TableCell>
+                      <TableCell align="right">{t.count}</TableCell>
+                      <TableCell align="right">{t.referenceImage}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+          </Box>
+        </div>
+
+        <div style={{
+          position: 'fixed',
+          left: '20px',
+          bottom: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px'
+        }}>
+          <Button variant="contained">{t.verifyDispense}</Button>
+          <Link href="/mainpage" passHref>
+            <Button variant="contained">{t.mainPage}</Button>
+          </Link>
+        </div>
       </div>
-    </div>
     </ProtectedRoute>
   );
 };

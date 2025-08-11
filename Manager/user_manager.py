@@ -1,3 +1,4 @@
+
 from fastapi import HTTPException, status
 
 class UserManager():
@@ -33,3 +34,12 @@ class UserManager():
             "user_id": user.user_id,
             "role": user.role.value
         }
+        
+    async def get_all_users(self):
+        users = await self.database.get_all_users()
+        if not users:
+            raise HTTPException(
+                status_code=404,
+                detail="No users found"
+            )
+        return users

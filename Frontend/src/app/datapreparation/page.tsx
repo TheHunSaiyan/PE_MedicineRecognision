@@ -19,6 +19,22 @@ const CameraApp: React.FC = () => {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <br></br>
+      <Link href="/datapreparation/remapannotation" passHref>
+        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
+    width: {
+      xs: '100%',
+      sm: 'auto',
+    },
+    minWidth: 400,
+    height: 80,
+    padding: '0 32px',
+    fontSize: '20px',
+    borderRadius: '8px',
+    boxShadow: 3
+  }}>
+          Remap Annotation IDs
+        </Button>
+      </Link>
       <Link href="/datapreparation/splitdataset" passHref>
         <Button variant="contained" style={{ marginLeft: '10px', marginBottom:'20px' }}  sx={{
     width: {
@@ -83,22 +99,6 @@ const CameraApp: React.FC = () => {
     boxShadow: 3
   }}>
           K-fold Sort
-        </Button>
-      </Link>
-      <Link href="/datapreparation/remapannotation" passHref>
-        <Button variant="contained" style={{ marginLeft: '10px' , marginBottom:'20px' }} sx={{
-    width: {
-      xs: '100%',
-      sm: 'auto',
-    },
-    minWidth: 400,
-    height: 80,
-    padding: '0 32px',
-    fontSize: '20px',
-    borderRadius: '8px',
-    boxShadow: 3
-  }}>
-          Remap Annotation IDs
         </Button>
       </Link>
       <Link href="/mainpage" passHref>

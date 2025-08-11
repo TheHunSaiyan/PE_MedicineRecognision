@@ -3,6 +3,7 @@ import random
 import shutil
 
 from fastapi import HTTPException, status
+from math import floor
 from pydantic import BaseModel
 from typing import Dict, List, Tuple
 
@@ -112,6 +113,33 @@ class SplitDataset:
                 train_images = image_files[:train_end]
                 val_images = image_files[train_end:val_end]
                 test_images = image_files[val_end:]
+                
+                u_images = [f for f in os.listdir(image_dir) if f.endswith('.jpg') and '_u_' in f]
+                s_images = [f for f in os.listdir(image_dir) if f.endswith('.jpg') and '_s_' in f]
+                
+                random.shuffle(u_images)
+                random.shuffle(s_images)
+                
+                total_u = len(u_images)
+                total_s = len(s_images)
+                
+                train_u = floor(total_u * train_pct / 100)
+                val_u = floor(total_u * val_pct / 100)
+                test_u = total_u - train_u - val_u
+                
+                train_s = floor(total_s * train_pct / 100)
+                val_s = floor(total_s * val_pct / 100)
+                test_s = total_s - train_s - val_s
+                
+                train_images = u_images[:train_u] + s_images[:train_s]
+                val_images = u_images[train_u:train_u+val_u] + s_images[train_s:train_s+val_s]
+                test_images = u_images[train_u+val_u:] + s_images[train_s+val_s:]
+                
+                random.shuffle(train_images)
+                random.shuffle(val_images)
+                random.shuffle(test_images)
+                
+                self._total_files = (len(train_images) + len(val_images) + len(test_images)) * 3
             
             self._move_files(train_images, image_dir, seg_label_dir, mask_dir, split_dirs['train'])
             self._move_files(val_images, image_dir, seg_label_dir, mask_dir, split_dirs['val'])
