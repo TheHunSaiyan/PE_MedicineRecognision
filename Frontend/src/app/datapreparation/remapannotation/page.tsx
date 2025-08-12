@@ -6,6 +6,7 @@ import Button from '@mui/material/Button';
 import Link from 'next/link';
 import LinearProgress from '@mui/material/LinearProgress';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 const CameraApp: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -102,7 +103,7 @@ const CameraApp: React.FC = () => {
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
       <div style={{ 
         textAlign: 'center', 

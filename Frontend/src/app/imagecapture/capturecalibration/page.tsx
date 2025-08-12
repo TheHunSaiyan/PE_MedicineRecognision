@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Typography, FormControlLabel, Radio } from '@mui/material';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
 import { send } from 'process';
+import { ROLES } from '../../../../constans/roles';
 
 interface LedParameters{
   upper_led: number;
@@ -25,10 +26,36 @@ const CameraApp: React.FC = () => {
   const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null);
   const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
   const [showLastImage, setShowLastImage] = useState(false);
+  const [sessionFolder, setSessionFolder] = useState<string>('');
   const [parameters, setParameters] = useState<LedParameters>({
     upper_led: 0,
     side_led: 0
   })
+
+useEffect(() => {
+    setIsMounted(true);
+    const initializeSession = async () => {
+      try {
+        const response = await fetch('http://localhost:2076/create_capture_directory', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ timestamp: new Date().toISOString() }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSessionFolder(data.folder_name || pageLoadTime);
+        }
+      } catch (error) {
+        console.error('Error initializing session folder:', error);
+      }
+    };
+    
+    initializeSession();
+    
+    return () => setIsMounted(false);
+  }, []);
 
 const handleHoldStart = () => {
     setShowLastImage(true);
@@ -96,13 +123,18 @@ const formatTimestamp = (date: Date): string => {
   }, []);
 
   const captureImage = async () => {
-    if (!isMounted) return;
-    setIsLoading(true);
-    setError(null);
-    
-     try {
+  if (!isMounted) return;
+  setIsLoading(true);
+  setError(null);
+  
+  try {
     const apiUrl = 'http://localhost:2076';
-    const response = await fetch(`${apiUrl}/capture`);
+    const response = await fetch(`${apiUrl}/capture_calibration_image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -110,34 +142,23 @@ const formatTimestamp = (date: Date): string => {
 
     const data = await response.json();
 
-     if (data.status === 'success' && data.filename) {
-      const imageUrl = `${apiUrl}/captured-images/${data.filename}`;
+    if (data.status === 'success' && data.filepath) {
+      const imageUrl = `${apiUrl}/${data.filepath.replace('\\', '/')}`;
+      
       setImageUrl(imageUrl);
       setCaptureTime(new Date().toLocaleTimeString());
 
-      const fileExtension = data.filename.split('.').pop();
-      const newFilename = `${pageLoadTime}_${captureCount}.${fileExtension}`;
-      setLastCapturedImage(newFilename);
+      const filename = data.filepath.split(/[\\/]/).pop() || `capture_${Date.now()}.jpg`;
+      setLastCapturedImage(filename);
       
-      const downloadResponse = await fetch(imageUrl);
-      const blob = await downloadResponse.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = newFilename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-
-      setCaptureCount(prev => prev +1)
+      setCaptureCount(prev => prev + 1);
     }
   } catch (err) {
     setError(err instanceof Error ? err.message : 'Unknown error occurred');
   } finally {
     setIsLoading(false);
   }
-  };
+};
 
   const toggleLiveFeed = () => {
     setIsLiveFeedActive(!isLiveFeedActive);
@@ -166,7 +187,7 @@ const formatTimestamp = (date: Date): string => {
 }, 2000);
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh'}}>
       <br></br>
       <div style={{alignItems: 'center', justifyContent: 'center', display: 'flex'}}>

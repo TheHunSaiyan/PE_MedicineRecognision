@@ -17,7 +17,8 @@
     "@mui/material": "^5.15.15",
     "@mui/icons-material": "^5.15.15",
     "material-react-table": "^2.0.0",
-    "notistack": "^3.0.0"
+    "notistack": "^3.0.0",
+    "jwt-decode": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5",

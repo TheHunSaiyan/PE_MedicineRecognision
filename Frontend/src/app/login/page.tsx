@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Button from '@mui/material/Button';
 import { Paper, TextField, Typography, Box, CircularProgress } from '@mui/material';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -10,7 +11,14 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { isAuthenticated, login } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+  if (isAuthenticated) {
+    router.push('/mainpage');
+  }
+}, [isAuthenticated, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

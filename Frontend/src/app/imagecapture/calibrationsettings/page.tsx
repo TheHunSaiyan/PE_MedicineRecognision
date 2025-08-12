@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import CloseIcon from '@mui/icons-material/Close';
+import { ROLES } from '../../../../constans/roles';
 
 interface CameraCalibrationParams {
   chess_row: number;
@@ -34,6 +36,7 @@ const CameraApp: React.FC = () => {
   const[enableStartCalibration, setEnableStartCalibration] = useState<boolean>(false);
   const [enableNewMatrix, setEnableNewMatrix] = useState<boolean>(false);
   const [enableUndistort, setEnableUndistort] = useState<boolean>(false);
+  const [hasError, setHasError] = useState<boolean>(false);
 
 const resetProgress = () => {
   setProgress(0);
@@ -48,6 +51,7 @@ const resetProgress = () => {
   setEnableNewMatrix(false);
   setEnableStartCalibration(false);
   setEnableUndistort(false);
+  setHasError(false);
 };
 
   useEffect(() => {
@@ -64,10 +68,12 @@ const resetProgress = () => {
           setError('No saved calibration parameters found. Using default values.');
         } else {
           const errorData = await response.json();
-          setError(`Failed to load parameters: ${errorData.detail || 'Unknown error'}`);
+          setError(`Failed to load parameters: ${errorData.detail || 'Unknown error'}. Please press the reset button.`);
+          setHasError(true);
         }
       } catch (err) {
-        setError(`Error loading parameters: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setError(`Error loading parameters: ${err instanceof Error ? err.message : 'Unknown error'}. Please press the reset button.`);
+        setHasError(true);
       } finally {
         setLoadingParams(false);
       }
@@ -176,21 +182,22 @@ const resetProgress = () => {
       setProgress(prev => prev + 25);
       setEnableNewMatrix(true);
     } else {
-      resetProgress();
-      try {
-        const errorData = await response.json();
-        setUploadStatus(`Calibration failed: ${errorData.detail || 'Unknown error'}`);
-      } catch {
-        setCalibrationSuccess(false);
-        setUploadStatus(`Calibration failed: ${response.statusText}`);
+        setHasError(true);
+        try {
+          const errorData = await response.json();
+          setUploadStatus(`Calibration failed: ${errorData.detail || 'Unknown error'}. Please press the reset button.`);
+        } catch {
+          setCalibrationSuccess(false);
+          setUploadStatus(`Calibration failed: ${response.statusText}. Please press the reset button.`);
+        }
       }
+    } catch (error) {
+      setHasError(true);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please press the reset button.`);
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (error) {
-    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  } finally {
-    setIsProcessing(false);
-  }
-};
+  };
 
   const clearSelection = () => {
     setSelectedFiles([]);
@@ -241,20 +248,21 @@ const resetProgress = () => {
       setProgress(prev => prev + 25);
       setEnableUndistort(true);
     } else {
-      resetProgress();
-      try {
-        const errorData = await response.json();
-        setUploadStatus(`Failed to generate new matrix: ${errorData.detail || 'Unknown error'}`);
-      } catch {
-        setUploadStatus(`Failed to generate new matrix: ${response.statusText}`);
+        setHasError(true);
+        try {
+          const errorData = await response.json();
+          setUploadStatus(`Failed to undistort images: ${errorData.detail || 'Unknown error'}. Please press the reset button.`);
+        } catch {
+          setUploadStatus(`Failed to undistort images: ${response.statusText}. Please press the reset button.`);
+        }
       }
+    } catch (error) {
+      setHasError(true);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please press the reset button.`);
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (error) {
-    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  } finally {
-    setIsProcessing(false);
-  }
-};
+  };
 
 const handleUndistortImages = async () => {
   setIsProcessing(true);
@@ -360,7 +368,7 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
 };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
       <div style={{ flex: '1 1 33%' }}>
         <div>
@@ -467,31 +475,55 @@ const handleUploadUndistortedMatrix = async (event: React.ChangeEvent<HTMLInputE
         </div>
       </div>
       <div style={{ flex: '1 1 66%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography id="status" gutterBottom>Status</Typography>
-        <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
-        {uploadStatus && (
-          <Typography variant="body2" style={{ marginTop: '10px' }}>
-            {uploadStatus}
-          </Typography>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', width: '100%' }}>
-  <FormControlLabel
-    control={<Checkbox checked={progress >= 25} disabled />}
-    label="Images Selected"
-  />
-  <FormControlLabel
-    control={<Checkbox checked={progress >= 50} disabled />}
-    label="Calibration Done"
-  />
-  <FormControlLabel
-    control={<Checkbox checked={progress >= 75} disabled />}
-    label="Matrix Generated"
-  />
-  <FormControlLabel
-    control={<Checkbox checked={progress >= 100} disabled />}
-    label="Images Undistorted"
-  />
-</div>
+          <Typography id="status" gutterBottom>Status</Typography>
+          <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
+          {uploadStatus && (
+            <Typography variant="body2" style={{ marginTop: '10px' }}>
+              {uploadStatus}
+            </Typography>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', width: '100%' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={progress >= 25 && !hasError}
+                  icon={hasError && progress >= 25 ? <CloseIcon color="error" /> : undefined}
+                  disabled
+                />
+              }
+              label="Images Selected"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={progress >= 50 && !hasError}
+                  icon={hasError && progress >= 50 ? <CloseIcon color="error" /> : undefined}
+                  disabled
+                />
+              }
+              label="Calibration Done"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={progress >= 75 && !hasError}
+                  icon={hasError && progress >= 75 ? <CloseIcon color="error" /> : undefined}
+                  disabled
+                />
+              }
+              label="Matrix Generated"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={progress >= 100 && !hasError}
+                  icon={hasError && progress >= 100 ? <CloseIcon color="error" /> : undefined}
+                  disabled
+                />
+              }
+              label="Images Undistorted"
+            />
+          </div>
         <div>
           <br />
         </div>

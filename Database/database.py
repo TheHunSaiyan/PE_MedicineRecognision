@@ -40,7 +40,7 @@ class Database:
         
         self.conn.commit()
 
-    def add_user(self, user: User):
+    async def add_user(self, user_data: dict) -> int:
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -49,17 +49,17 @@ class Database:
             VALUES (?, ?, ?, ?, ?)
             """,
             (
-                user.first_name,
-                user.last_name,
-                user.email,
-                user.hashed_password,
-                user.role.value
+                user_data["first_name"],
+                user_data["last_name"],
+                user_data["email"],
+                user_data["hashed_password"],
+                user_data["role"]
             )
         )
         self.conn.commit()
         return cursor.lastrowid
 
-    def get_user(self, user_id: int) -> Optional[User]:
+    async def get_user(self, user_id: int) -> Optional[User]:
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT * FROM users WHERE user_id = ?",
@@ -110,24 +110,24 @@ class Database:
             ) for row in rows
         ]
         
-    async def update_user(self, user: User):
+    async def update_user(self, user_data: dict) -> int:
         cursor = self.conn.cursor()
         cursor.execute(
             """
             UPDATE users 
-            SET first_name = ?, last_name = ?, email = ?, hashed_password = ?, role = ?
+            SET first_name = ?, last_name = ?, email = ?, role = ?
             WHERE user_id = ?
             """,
             (
-                user.first_name,
-                user.last_name,
-                user.email,
-                user.hashed_password,
-                user.role.value,
-                user.user_id
+                user_data["first_name"],
+                user_data["last_name"],
+                user_data["email"],
+                user_data["role"],
+                user_data["user_id"]
             )
         )
         self.conn.commit()
+        return user_data["user_id"]
     
     async def delete_user(self, user_id: int):
         cursor = self.conn.cursor()

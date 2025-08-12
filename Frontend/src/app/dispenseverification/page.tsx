@@ -12,6 +12,7 @@ import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import { Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 import ProtectedRoute from '../../../components/ProtectedRoute';
+import { ROLES } from '../../../constans/roles';
 
 const CameraApp: React.FC = () => {
   const [language, setLanguage] = useState('hu');
@@ -170,7 +171,7 @@ const CameraApp: React.FC = () => {
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN, ROLES.NURSE, ROLES.DOCTOR]}>
       <div className="camera-container" style={{
         padding: '20px',
         width: '100vw',

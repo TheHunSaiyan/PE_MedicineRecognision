@@ -8,6 +8,7 @@ import MuiAlert, { AlertProps } from '@mui/material/Alert';
 import { closeSnackbar, SnackbarProvider } from 'notistack';
 import { useSnackbar } from 'notistack';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -183,7 +184,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
     }, [isProcessing]);
 
   return(
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
         <div style={{ flex: '1 1 33%' }}>
             <h1>Data availability check:</h1>

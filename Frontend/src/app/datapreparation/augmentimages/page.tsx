@@ -8,6 +8,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
 import LinearProgress from '@mui/material/LinearProgress';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -248,7 +249,7 @@ const stopAugmentation = async () => {
 
 
 return (
-  <ProtectedRoute>
+  <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
         <div style={{ flex: '1 1 33%' }}>
         <h1>Data availability check:</h1>

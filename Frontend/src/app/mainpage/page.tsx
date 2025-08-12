@@ -5,13 +5,14 @@ import Button from '@mui/material/Button';
 import Link from 'next/link';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { useAuth } from '../../../contexts/AuthContext';
+import { ROLES } from '../../../constans/roles';
 
 const CameraApp: React.FC = () => {
   const { logout } = useAuth();
 
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.NURSE, ROLES.DOCTOR, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{
         position: 'absolute', left: '50%', top: '50%',
         transform: 'translate(-50%, -50%)'

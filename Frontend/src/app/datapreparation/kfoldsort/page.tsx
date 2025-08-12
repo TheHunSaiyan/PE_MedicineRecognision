@@ -5,6 +5,7 @@ import {Button, Paper, FormControlLabel, Radio, TextField, FormControl, InputLab
 import Link from 'next/link';
 import MuiAlert, { AlertProps } from '@mui/material/Alert';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 const AlertComponent = React.forwardRef<HTMLDivElement, AlertProps>(function Alert(
   props,
@@ -152,7 +153,7 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
 
     return (
-      <ProtectedRoute>
+      <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{
         position: 'absolute', left: '50%', top: '50%',
         transform: 'translate(-50%, -50%)'

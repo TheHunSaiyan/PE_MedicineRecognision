@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, Switch, FormControlLabel, Typography, Paper, CircularProgress, Grid, Container, Slider, Radio} from '@mui/material';
 import Link from 'next/link';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 interface CameraParameters {
   brightness: number;
@@ -333,7 +334,7 @@ const sendLedUpdate = debounce(async (params: LedParameters) => {
 };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{minHeight: '100vh', display: 'flex',
   flexDirection: 'column'}}>
     <Container maxWidth="xl" sx={{

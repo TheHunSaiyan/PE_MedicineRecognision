@@ -2,8 +2,10 @@ import os
 import random
 import shutil
 
+import cv2
 from fastapi import HTTPException, status
 from math import floor
+import numpy as np
 from pydantic import BaseModel
 from typing import Dict, List, Tuple
 
@@ -34,17 +36,87 @@ class SplitDataset:
                 return len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
             return 0
         
+        def is_valid_mask(mask_path):
+            try:
+                mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if mask is None:
+                    return False
+                unique_values = np.unique(mask)
+                return set(unique_values).issubset({0, 255})
+            except Exception as e:
+                logger.error(f"Error validating mask {mask_path}: {str(e)}")
+                return False
+        
         img_count = get_file_count(AppConfig.ORIGINAL_IMAGES)
         label_count = get_file_count(AppConfig.ORIGINAL_LABELS)
         mask_count = get_file_count(AppConfig.ORIGINAL_MASKS)
         
-        counts_equal = len({img_count, label_count, mask_count}) == 1
+        valid_mask_count = 0
+        if mask_count > 0:
+            for mask_file in os.listdir(AppConfig.ORIGINAL_MASKS):
+                mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, mask_file)
+                if is_valid_mask(mask_path):
+                    valid_mask_count += 1
+                else:
+                    logger.warning(f"Invalid mask found: {mask_file}")
+        
+        if (mask_count == 0 or valid_mask_count != img_count or 
+            valid_mask_count != label_count) and img_count > 0 and label_count > 0:
+            logger.info("Missing or invalid masks found, generating masks from images and labels...")
+            await self.generate_masks_from_labels()
+            mask_count = get_file_count(AppConfig.ORIGINAL_MASKS)
+            valid_mask_count = mask_count
+        
+        counts_equal = len({img_count, label_count, valid_mask_count}) == 1
         
         return {
             "images": img_count > 0 and counts_equal,
             "segmentation_labels": label_count > 0 and counts_equal,
-            "mask_images": mask_count > 0 and counts_equal
+            "mask_images": valid_mask_count > 0 and counts_equal
         }
+        
+    async def generate_masks_from_labels(self):
+        os.makedirs(AppConfig.ORIGINAL_MASKS, exist_ok=True)
+        
+        for img_file in os.listdir(AppConfig.ORIGINAL_IMAGES):
+                
+            img_path = os.path.join(AppConfig.ORIGINAL_IMAGES, img_file)
+            img = cv2.imread(img_path)
+            if img is None:
+                continue
+                
+            height, width = img.shape[:2]
+            
+            mask = np.zeros((height, width), dtype=np.uint8)
+            
+            label_file = os.path.splitext(img_file)[0] + '.txt'
+            label_path = os.path.join(AppConfig.ORIGINAL_LABELS, label_file)
+            
+            if not os.path.exists(label_path):
+                continue
+                
+            with open(label_path, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) < 5:
+                        continue
+                        
+                    class_id = int(parts[0])
+                    points = list(map(float, parts[1:]))
+                    
+                    polygon = []
+                    for i in range(0, len(points), 2):
+                        x = int(points[i] * width)
+                        y = int(points[i+1] * height)
+                        polygon.append([x, y])
+                    
+                    cv2.fillPoly(mask, [np.array(polygon)], color=255)
+            
+            mask_file = os.path.splitext(img_file)[0] + '.png'
+            mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, mask_file)
+            cv2.imwrite(mask_path, mask)
+            
+            logger.info(f"Generated mask: {mask_path}")
         
     def start_split(self, data: Dict[str, any]):
         logger.info("Spliting dataset started...")

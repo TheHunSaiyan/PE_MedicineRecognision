@@ -16,6 +16,7 @@ from pathlib import Path
 import threading
 import concurrent.futures
 
+from jwtbearer import JWTBearer
 from Controllers.camera_controller import CameraController
 from Manager.calibration_manager import CalibrationManager
 from Controllers.led_controller import LEDController
@@ -27,6 +28,7 @@ from Models.roles import Role
 from Config.config import AppConfig
 
 from ImageCapture.CameraSettings.camera_settings import CameraSettings
+from ImageCapture.CaptureCalibration.capturecalibration import CaptureCalibration
 from ImageCapture.CalibrationSettings.calibration_settings import CalibrationSettings
 from ImageCapture.CapturePill.capture_pill import CapturePill
 from Logger.logger import logger
@@ -39,6 +41,8 @@ from DispenseVerification.dispenseverification import DispenseVerification
 from Database.database import Database
 from Manager.user_manager import UserManager
 
+security = JWTBearer()
+
 class APIServer:
     def __init__(self):
         self.app = FastAPI()
@@ -49,6 +53,7 @@ class APIServer:
         self.setup_middleware()
         self.setup_routes()
         self.camera_settings = CameraSettings(self.camera, self.led)
+        self.capture_calibration = CaptureCalibration(self.camera, self.led)
         self.calibration_settings = CalibrationSettings(self.calibration_manager)
         self.capture_pill = CapturePill(self.camera)
         self.splitdataset = SplitDataset()
@@ -63,10 +68,11 @@ class APIServer:
     def setup_middleware(self):
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://localhost:2077"],
+            allow_origins=["*"],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["Content-Disposition"]
         )
         
         self.app.mount(
@@ -101,6 +107,14 @@ class APIServer:
         @self.app.get("/camera_settings")
         async def get_camera_settings():
             return await self.camera_settings.get_camera_settings()
+        
+        @self.app.post("/create_capture_directory")
+        async def create_capture_directory():
+            return await self.capture_calibration.create_capture_directory()
+        
+        @self.app.post("/capture_calibration_image")
+        async def capture_calibration_image():
+            return await self.capture_calibration.capture_calibration_image()
 
         @self.app.post("/calibrate")
         async def update_camera_settings(params: CameraParameters):
@@ -238,6 +252,18 @@ class APIServer:
         @self.app.get("/get_all_users")
         async def get_all_users():
             return await self.user_manager.get_all_users()
+        
+        @self.app.post("/create_user")
+        async def create_user(data: Dict[str, Any]):
+            return await self.user_manager.create_user(data)
+        
+        @self.app.post("/update_user")
+        async def update_user(data: Dict[str, Any]):
+            return await self.user_manager.update_user(data)
+        
+        @self.app.post("/delete_user")
+        async def delete_user(user_id: str = Body(...)):
+            return await self.user_manager.delete_user(user_id)
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

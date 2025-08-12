@@ -7,6 +7,7 @@ import Select from 'react-select'
 import {Snackbar, FormControlLabel, Radio} from '@mui/material';
 import Alert from '@mui/material/Alert';
 import ProtectedRoute from '../../../../components/ProtectedRoute';
+import { ROLES } from '../../../../constans/roles';
 
 interface Medication {
   id: number;
@@ -224,7 +225,7 @@ const formatMedicationName = (name: string): string => {
 }, 2000);
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
       <div>

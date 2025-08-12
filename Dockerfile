@@ -23,6 +23,7 @@ RUN pip3 install ultralytics
 RUN pip3 install passlib
 RUN pip3 install bcrypt
 RUN pip3 install python-jose[cryptography] passlib
+RUN pip3 install PyJWT
 
 
 COPY . .

@@ -1,12 +1,16 @@
 from pathlib import Path
 
 class AppConfig:
+    JWT_SECRET_KEY = "6cee5413be1ed9b11531617a2c798ece"
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRE_MINUTES = 480
     CONFIG_FILE = "Data/JSON/camera_params.json"
     CALI_CONFIG_FILE = "Data/JSON/camera_calibration_params.json"
     CAPTURED_IMAGES_DIR = "Data/CapturedImages"
     CALIBRATION_IMAGES_DIR = "Data/CalibrationImages"
     UNDISTORTED_IMAGES_DIR = "Data/UndistortedImages"
     PILLS_DATA_FILE = "Data/JSON/Pills.json"
+    LED_PARAMS_FILE = "Data/JSON/led_params.json"
     LOG = "Logs"
     ORIGINAL_IMAGES = "Data/Original/images"
     ORIGINAL_LABELS = "Data/Original/segmentation_labels"

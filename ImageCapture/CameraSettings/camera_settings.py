@@ -1,7 +1,8 @@
 from fastapi import HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from datetime import datetime
 import cv2
+import os
 import time
 from typing import Dict, Any
 
@@ -45,8 +46,8 @@ class CameraSettings:
             )
             
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
-        filename = f"{AppConfig.CAPTURED_IMAGES_DIR}/{timestamp}.png"
-        cv2.imwrite(filename, frame)
+        filename = f"{AppConfig.CAPTURED_IMAGES_DIR}/{timestamp}.jpg"
+        cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
         logger.info(f"Image saved: {filename}")
         
         return {
