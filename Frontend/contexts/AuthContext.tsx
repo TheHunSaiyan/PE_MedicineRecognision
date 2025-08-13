@@ -2,20 +2,14 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { jwtDecode } from 'jwt-decode';
+import { Role } from '../constans/roles';
 
-interface UserData {
-  role: string;
-  sub: string;
-  exp: number;
-}
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  userRole: string | null;
+  userRole: Role | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  token: string | null;
   hasRole: (requiredRole: string) => boolean;
   hasAnyRole: (allowedRoles: string[]) => boolean;
 }
@@ -24,44 +18,31 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const checkAuth = async () => {
-  const storedToken = localStorage.getItem('token');
-  
-  if (storedToken) {
-    try {
-      if (isTokenExpired(storedToken)) {
-        logout();
-        return;
+      try {
+        const response = await fetch('http://localhost:2076/check_session', {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setIsAuthenticated(true);
+          setUserRole(data.role as Role);
+        }
+      } catch (error) {
+        console.error("Session check failed:", error);
+      } finally {
+        setIsLoading(false);
       }
-      
-      const decoded: UserData = jwtDecode(storedToken);
-      setToken(storedToken);
-      setUserRole(decoded.role);
-      setIsAuthenticated(true);
-    } catch (error) {
-      console.error("Invalid token:", error);
-      logout();
-    }
-  }
-  setIsLoading(false);
-};
+    };
+    
     checkAuth();
   }, []);
-
-  const isTokenExpired = (token: string): boolean => {
-  try {
-    const decoded: UserData = jwtDecode(token);
-    return decoded.exp * 1000 < Date.now();
-  } catch (error) {
-    return true;
-  }
-};
 
   const login = async (email: string, password: string) => {
     try {
@@ -69,7 +50,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
@@ -78,12 +58,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        const decoded: UserData = jwtDecode(data.token);
-        setToken(data.token);
-        setUserRole(decoded.role);
+        setUserRole(data.role as Role);
         setIsAuthenticated(true);
-        
         router.push('/mainpage');
       } else {
         throw new Error(data.detail || 'Login failed');
@@ -93,12 +69,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUserRole(null);
-    setIsAuthenticated(false);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await fetch('http://localhost:2076/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      setIsAuthenticated(false);
+      setUserRole(null);
+      router.push('/login');
+    }
   };
 
   if (isLoading) {
@@ -115,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, userRole, login, logout, token, hasRole, hasAnyRole }}>
+    <AuthContext.Provider value={{ isAuthenticated, userRole, login, logout, hasRole, hasAnyRole }}>
       {children}
     </AuthContext.Provider>
   );

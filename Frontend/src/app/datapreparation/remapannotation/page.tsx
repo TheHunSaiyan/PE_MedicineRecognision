@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Snackbar } from '@mui/material';
+import { Typography, Paper, Box, TextField, Alert, FormControlLabel, Checkbox, Snackbar, Radio } from '@mui/material';
 import Button from '@mui/material/Button';
 import Link from 'next/link';
 import LinearProgress from '@mui/material/LinearProgress';
@@ -19,6 +19,7 @@ const CameraApp: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [filesSelected, setFilesSelected] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedMode, setSelectedMode] = useState('');
 
   const handleFolderSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -50,6 +51,7 @@ const CameraApp: React.FC = () => {
       selectedFiles.forEach(file => {
         formData.append('files', file);
       });
+      formData.append('mode', selectedMode);
 
       const response = await fetch('http://localhost:2076/start_remap_annotation', {
         method: 'POST',
@@ -102,6 +104,10 @@ const CameraApp: React.FC = () => {
     }
   };
 
+  const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSelectedMode(event.target.value);
+      };
+
   return (
     <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN]}>
     <div className="camera-container" style={{ padding: '20px', height: '100vh', display: 'flex' }}>
@@ -134,12 +140,35 @@ const CameraApp: React.FC = () => {
           </Button>
         </label>
         <br></br>
+        <FormControlLabel
+                        control={
+                          <Radio
+                            checked={selectedMode === 'objectdetection'}
+                            onChange={handleModeChange}
+                            value="objectdetection"
+                            name="mode-selection"
+                          />
+                        }
+                        label="Object Detection"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Radio
+                            checked={selectedMode === 'segmentation'}
+                            onChange={handleModeChange}
+                            value="segmentation"
+                            name="mode-selection"
+                          />
+                        }
+                        label="Segmentation"
+                      />
+        <br></br>
         <Button 
           variant="contained" 
           color="primary" 
           onClick={startRemap}
           style={{ marginTop: '20px', marginBottom: '20px' }}
-          disabled={!filesSelected || isProcessing}
+          disabled={!filesSelected || isProcessing || !selectedMode}
         >
           {isProcessing ? 'Processing...' : 'Start'}
         </Button>

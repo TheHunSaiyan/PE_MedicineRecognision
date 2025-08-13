@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, status, Body
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File, status, Body
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,11 +68,11 @@ class APIServer:
     def setup_middleware(self):
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=["http://localhost:2077"],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["Content-Disposition"]
+            expose_headers=["*"]
         )
         
         self.app.mount(
@@ -95,6 +95,46 @@ class APIServer:
         async def shutdown_event():
             self.camera.stop_capture()
             logger.info("Camera stopped")
+            
+        @self.app.post("/attempt_login")
+        async def attempt_login(data: Dict[str, Any], response: Response, request: Request):
+            try:
+                result = await self.user_manager.login(data)
+                print(f"Login successful: {result}")
+                return JSONResponse(content=result)
+            except HTTPException as e:
+                print(f"Login error: {str(e)}")
+                return JSONResponse(
+                    status_code=e.status_code,
+                    content={"detail": e.detail},
+                    headers={
+                        "Access-Control-Allow-Credentials": "true",
+                        "Access-Control-Allow-Origin": "http://localhost:2077"
+                    }
+                )
+            
+        @self.app.post("/logout")
+        async def logout(response: Response, request: Request):
+            session_id = request.cookies.get("session_id")
+            if session_id:
+                self.user_manager.session_manager.invalidate_session(session_id)
+            response.delete_cookie("session_id")
+            return {"status": "success"}
+
+        @self.app.get("/check_session")
+        async def check_session(request: Request):
+            session_id = request.cookies.get("session_id")
+            if not session_id:
+                raise HTTPException(status_code=401, detail="Not authenticated")
+            
+            session_data = self.user_manager.session_manager.validate_session(session_id)
+            if not session_data:
+                raise HTTPException(status_code=401, detail="Invalid session")
+            
+            return {
+                "user_id": session_data.get("user_id"),
+                "role": session_data.get("role")
+            }
 
         @self.app.get("/video_feed")
         async def video_feed():
@@ -230,8 +270,8 @@ class APIServer:
             return await self.kfoldsort.get_sort_progress()
         
         @self.app.post("/start_remap_annotation")
-        async def start_remap(files: List[UploadFile] = File(...)):
-            return await self.remapannotation.start_remap(files)
+        async def start_remap(files: List[UploadFile] = File(...), mode: Optional[str] = Body(None)):
+            return await self.remapannotation.start_remap(files, mode)
         
         @self.app.get("/get_remap_annotation_progress")
         async def get_progress():
@@ -244,10 +284,6 @@ class APIServer:
         @self.app.post("/check_environment")
         async def verify_check_environment(data: Dict[str, Any]):
             return await self.dispenseverification.check_environment(data.get("holder_id", ""))
-        
-        @self.app.post("/attempt_login")
-        async def attempt_login(data: Dict[str, Any]):
-            return await self.user_manager.login(data)
         
         @self.app.get("/get_all_users")
         async def get_all_users():
@@ -262,8 +298,8 @@ class APIServer:
             return await self.user_manager.update_user(data)
         
         @self.app.post("/delete_user")
-        async def delete_user(user_id: str = Body(...)):
-            return await self.user_manager.delete_user(user_id)
+        async def delete_user(data: Dict[str, Any]):
+            return await self.user_manager.delete_user(data.get("user_id", ""))
 
     def run(self, host: str = "0.0.0.0", port: int = 2076):
         import uvicorn

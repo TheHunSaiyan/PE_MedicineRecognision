@@ -4,6 +4,11 @@ class AppConfig:
     JWT_SECRET_KEY = "6cee5413be1ed9b11531617a2c798ece"
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRE_MINUTES = 480
+    REDIS_HOST = "172.18.0.2"
+    REDIS_PORT = 6379
+    REDIS_DB = 0
+    REDIS_PASSWORD = None
+    SESSION_EXPIRE_SECONDS = 3600
     CONFIG_FILE = "Data/JSON/camera_params.json"
     CALI_CONFIG_FILE = "Data/JSON/camera_calibration_params.json"
     CAPTURED_IMAGES_DIR = "Data/CapturedImages"

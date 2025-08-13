@@ -1,6 +1,9 @@
+from fastapi.security import HTTPBearer
+from Manager.session_manager import SessionManager
 import jwt
 from datetime import datetime, timedelta
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Response
+from fastapi.responses import JSONResponse
 
 from Config.config import AppConfig
 from Logger.logger import logger
@@ -9,6 +12,8 @@ from Models.user import User
 class UserManager():
     def __init__(self, database):
         self.database = database
+        self.session_manager = SessionManager()
+        self.security = HTTPBearer()
         
     async def login(self, data: dict):
         email = data.get("email")
@@ -35,12 +40,19 @@ class UserManager():
                 status_code=401,
                 detail="Incorrect password"
             )
+            
+        session_id = self.session_manager.create_session(
+            user_id=str(user.user_id),
+            role=user.role.value,
+            expires_in=AppConfig.SESSION_EXPIRE_SECONDS
+        )
+        
         token = self._generate_jwt_token(user)
         
         logger.info(f"User {email} logged in successfully")
+        
         return {
             "status": "success",
-            "token": token,
             "user_id": user.user_id,
             "role": user.role.value
         }

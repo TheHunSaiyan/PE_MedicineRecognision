@@ -1,6 +1,22 @@
 version: "3"
 
 services:
+  redis:
+      image: redis:alpine
+      container_name: redis
+      hostname: redis
+      ports:
+        - "6379:6379"
+      volumes:
+        - redis_data:/data
+      networks:
+        - app-network
+      healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 5s
+        timeout: 3s
+        retries: 3
+
   biotechnica:
     build: .
     ports: 
@@ -21,7 +37,13 @@ services:
     privileged: true
     environment:
       - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     command: ["sh", "-c", "if [ \"$UVICORN_RELOAD\" = \"true\" ]; then uvicorn api_server:app --host 0.0.0.0 --port 2076 --reload; else python api_server.py; fi"]
+    depends_on:
+      - redis
+    networks:
+      - app-network
 
   kiroshi:
     image: node:18
@@ -37,3 +59,16 @@ services:
     command: ["sh", "-c", "npm install && npm run dev"]
     depends_on:
       - biotechnica
+
+networks:
+  app-network:
+    name: pe_medicinerecognision_app-network
+    driver: bridge
+    attachable: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:

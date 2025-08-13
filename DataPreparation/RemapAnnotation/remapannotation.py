@@ -27,22 +27,20 @@ class RemapAnnotation:
             logger.error("Medication data can't be loaded.")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Medication data can't be loaded."
+                detail="Medication data can't be loaded."
             )
-            
+        
         for med in self.data.get('medications', []):
             if med.get('name') == class_name:
                 return med.get('id')
-        logger.error(f"Class name '{class_name}' not found in JSON data.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=(f"Class name '{class_name}' not found in JSON data.")
-        )
         
-    async def _process_file(self, file_path: str):
+        logger.error(f"Class name '{class_name}' not found in JSON data.")
+        return 0
+        
+    async def _process_file(self, file_path: str, mode: str):
         filename = os.path.basename(file_path)
         class_name = os.path.basename(filename)
-        match = re.match(r'^(?:[0-3]\d{3})_([a-z0-9_]+)_(?:u|s)_(?:t|b)\.txt$', class_name)
+        match = re.match(r'^(?:[0-3]\d{3})_([a-z0-9_-]+)_(?:u|s)_(?:t|b)\.txt$', filename.lower())
         
         if not match:
             logger.error(f"Filename '{class_name}' does not match expected pattern.")
@@ -51,10 +49,13 @@ class RemapAnnotation:
                 detail=(f"Filename '{class_name}' does not match expected pattern.")
             )
             
-        class_name = match.group(1)
-        
-        real_id = self._find_real_id(class_name)
-        
+        if mode == 'objectdetection':
+            class_name = match.group(1)
+            
+            real_id = self._find_real_id(class_name)
+        else:
+            real_id = 0
+            
         with open(file_path, 'r') as file:
             lines = file.readlines()
         
@@ -84,7 +85,7 @@ class RemapAnnotation:
                 detail=(f"Error cleaning output directory: {str(e)}")
             )
     
-    async def start_remap(self, files: List[UploadFile]):
+    async def start_remap(self, files: List[UploadFile], mode: str):
         try:
             if self.processing:
                 return {"status": "error", "message": "Process already running"}
@@ -95,6 +96,20 @@ class RemapAnnotation:
             os.makedirs(AppConfig.REMAPED_ANNOTATION, exist_ok=True)
             
             self.files_to_process = []
+            if mode is None:
+                logger.error("Mode is required for remapping")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Mode is required for remapping"
+                )
+            
+            if mode not in ['objectdetection', 'segmentation']:
+                logger.error(f"Invalid mode: {mode}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid mode: {mode}"
+                )
+            
             for file in files:
                 clean_filename = os.path.basename(file.filename)
                 file_path = os.path.join(AppConfig.REMAPED_ANNOTATION, clean_filename)
@@ -106,9 +121,15 @@ class RemapAnnotation:
             self.current_file_index = 0
             self.processing = True
             
+            logger.info(f"Starting remap annotation with mode: {mode}")
+            if mode == 'objectdetection':
+                logger.info("Processing files for Object Detection mode")
+            elif mode == 'segmentation':
+                logger.info("Processing files for Segmentation mode")
+            
             for i, file_path in enumerate(self.files_to_process):
                 try:
-                    await self._process_file(file_path)
+                    await self._process_file(file_path, mode)
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {str(e)}")
                     raise HTTPException(
@@ -118,7 +139,7 @@ class RemapAnnotation:
                 finally:
                     self.current_file_index = i + 1
         except Exception as e:
-            logger.logger(e)
+            logger.error(e)
             raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=(e)
