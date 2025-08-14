@@ -47,7 +47,7 @@ class CapturePill:
             pill_dir = Path(AppConfig.CAPTURED_IMAGES_DIR) / pill_name
             pill_dir.mkdir(parents=True, exist_ok=True)
             
-            existing_images = list(pill_dir.glob("*.png"))
+            existing_images = list(pill_dir.glob("*.jpg"))
             next_image_number = len(existing_images)
             
             frame = self.camera.get_frame()
@@ -58,7 +58,7 @@ class CapturePill:
                     detail="No frame available"
                 )
 
-            filename = f"{next_image_number:03d}_{pill_name}_{lamp_position[0]}_{pill_side[0]}.jpg"
+            filename = f"{pill_name}_{lamp_position[0]}_{pill_side[0]}_{next_image_number:03d}.jpg"
             filepath = pill_dir / filename
             
             cv2.imwrite(str(filepath), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])

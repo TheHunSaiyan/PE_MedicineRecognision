@@ -10,7 +10,6 @@ class SessionManager:
         self._connect_with_retry()
 
     def _connect_with_retry(self, max_attempts=10, delay=3):
-        """Connect to Redis using Docker's internal DNS"""
         for attempt in range(max_attempts):
             try:
                 self.redis = redis.Redis(
@@ -22,10 +21,8 @@ class SessionManager:
                     health_check_interval=30
                 )
                 if self.redis.ping():
-                    print("✅ Successfully connected to Redis")
                     return
             except redis.ConnectionError as e:
-                print(f"⚠️ Attempt {attempt + 1} failed: {str(e)}")
                 if attempt == max_attempts - 1:
                     raise RuntimeError(f"Could not connect to Redis after {max_attempts} attempts")
                 time.sleep(delay * (attempt + 1))

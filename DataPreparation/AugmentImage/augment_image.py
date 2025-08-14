@@ -1,3 +1,5 @@
+import base64
+import gc
 import os
 import glob
 import cv2
@@ -5,10 +7,11 @@ import numpy as np
 import random
 import shutil
 import qrcode
+import redis
 
 from fastapi import HTTPException, status
 from PIL import Image
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Generator, List, Optional, Tuple
 
 from Config.config import AppConfig
 from Logger.logger import logger
@@ -35,6 +38,67 @@ class AugmentImage:
         self._total_files = 0
         self._processed_files = 0
         self.stop = False
+        
+        self.redis = redis.Redis(
+        host='redis', 
+        port=6379,
+        db=0,       
+        socket_connect_timeout=3,
+        decode_responses=False  
+        )
+        self.redis_cache_prefix = "img_aug:"
+        
+        
+        
+    def _serialize_image(self, image):
+        _, buffer = cv2.imencode('.png', image)
+        return base64.b64encode(buffer).decode('utf-8')
+    
+    def _deserialize_image(self, image_str):
+        buffer = base64.b64decode(image_str.encode('utf-8'))
+        return cv2.imdecode(np.frombuffer(buffer, np.uint8), -1)
+    
+    def cache_image_triplet(self, img_file, mask_file, ann_file, is_train=True):
+        base_name = os.path.splitext(os.path.basename(img_file))[0]
+        cache_key = f"{self.redis_cache_prefix}{base_name}"
+        
+        image = cv2.imread(img_file)
+        mask = cv2.imread(mask_file)
+        with open(ann_file, 'r') as f:
+            annotation = f.read()
+        
+        if image is None or mask is None:
+            return False
+            
+        data = {
+            'image': self._serialize_image(image),
+            'mask': self._serialize_image(mask),
+            'annotation': annotation,
+            'is_train': str(is_train)
+        }
+        
+        self.redis.hset(cache_key, mapping=data)
+        self.redis.expire(cache_key, 3600)
+        return True
+    
+    def get_cached_triplet(self, base_name):
+        try:
+            cache_key = f"{self.redis_cache_prefix}{base_name}"
+            
+            if not self.redis.exists(cache_key):
+                return None
+                
+            data = self.redis.hgetall(cache_key)
+            
+            return {
+                'image': self._deserialize_image(data[b'image'].decode()),
+                'mask': self._deserialize_image(data[b'mask'].decode()),
+                'annotation': data[b'annotation'].decode(),
+                'is_train': data[b'is_train'].decode().lower() == 'true'
+            }
+        except Exception as e:
+            logger.error(f"Error in get_cached_triplet: {str(e)}")
+            return None
         
     async def get_data_availability(self):
         return {
@@ -65,12 +129,10 @@ class AugmentImage:
             else:
                 os.makedirs(path, exist_ok=True)
 
-    def save_data(self, image, mask, method, txt_op="copy", txt_file=None, base_name=None, is_train=True):
+    def save_data(self, image, mask, method, txt_op="copy", txt_file=None, base_name=None, is_train=True, annotation=None):
         if image is None or image.size == 0:
-           print("Warning: Empty image, skipping save.")
            return
         if mask is None or mask.size == 0:
-           print("Warning: Empty mask, skipping save.")
            return
        
         if is_train:
@@ -91,8 +153,39 @@ class AugmentImage:
     
         if txt_op == "copy" and txt_file and os.path.exists(txt_file):
             shutil.copy(txt_file, ann_out_path)
+        elif annotation:
+            with open(ann_out_path, 'w') as f:
+                f.write(annotation)
+                
+        cache_key = f"{self.redis_cache_prefix}aug:{base_name}"
+        try:
+            self.redis.hset(cache_key, mapping={
+                'image': self._serialize_image(image),
+                'mask': self._serialize_image(mask),
+                'annotation': open(ann_out_path).read(),
+                'is_train': str(is_train)
+            })
+            self.redis.expire(cache_key, 3600)
+        except Exception as e:
+            logger.error(f"Redis cache error: {str(e)}")
+            
+    def clear_redis_cache(self):
+        cache_keys = self.redis.keys(f"{self.redis_cache_prefix}*")
+        if cache_keys:
+            self.redis.delete(*cache_keys)
 
-    def get_image_triplets(self, is_train=True):
+    def _get_file_count(self, path: str) -> int:
+        return len(glob.glob(os.path.join(path, "*.jpg"))) + \
+               len(glob.glob(os.path.join(path, "*.png"))) + \
+               len(glob.glob(os.path.join(path, "*.jpeg")))
+
+    def get_image_triplets(self, is_train: bool) -> Tuple[Generator[Tuple[np.ndarray, np.ndarray, str, bool, str], None, None], int]:
+        try:
+            self.redis.ping()
+        except Exception as e:
+            logger.error(f"Redis connection error: {str(e)}")
+            return iter([]), 0
+
         if is_train:
             image_path = self.train_image_path
             mask_path = self.train_mask_path
@@ -101,23 +194,54 @@ class AugmentImage:
             image_path = self.val_image_path
             mask_path = self.val_mask_path
             annotation_path = self.val_annotation_path
-            
-        files = sorted(glob.glob(os.path.join(image_path, "*.*")))
-        self._total_files = 0
+
+        file_count = self._get_file_count(image_path)
+        if file_count == 0:
+            return iter([]), 0
+
+        logger.info(f"Found {file_count} image files in {'train' if is_train else 'val'} set")
         
-        logger.info(f"Found {len(files)} image files in {'train' if is_train else 'val'} set")
-        
-        valid_triplets = []
-        for img_file in files:
-            base_name = os.path.splitext(os.path.basename(img_file))[0]
-            mask_file = os.path.join(mask_path, f"{base_name}.jpg")
-            ann_file = os.path.join(annotation_path, f"{base_name}.txt")
-            if os.path.exists(mask_file) and os.path.exists(ann_file):
-                valid_triplets.append((img_file, mask_file, ann_file, is_train))
-        
-        self._total_files = len(valid_triplets)
-        for triplet in valid_triplets:
-            yield triplet
+        def triplet_generator():
+            for img_file in glob.glob(os.path.join(image_path, "*.*")):
+                if img_file.lower().endswith(('.jpg', '.png', '.jpeg')):
+                    base_name = os.path.splitext(os.path.basename(img_file))[0]
+                    
+                    cached = self.get_cached_triplet(base_name)
+                    if cached:
+                        yield (cached['image'], cached['mask'], cached['annotation'], cached['is_train'], base_name)
+                        continue
+
+                    mask_file = next(
+                        (os.path.join(mask_path, f"{base_name}{ext}") 
+                        for ext in ['.png', '.jpg', '.jpeg'] 
+                        if os.path.exists(os.path.join(mask_path, f"{base_name}{ext}"))))
+                    
+                    ann_file = next(
+                        (os.path.join(annotation_path, f"{base_name}{ext}") 
+                         for ext in ['.txt'] 
+                         if os.path.exists(os.path.join(annotation_path, f"{base_name}{ext}"))),
+                        None)
+
+                    if mask_file and ann_file:
+                        if self.cache_image_triplet(img_file, mask_file, ann_file, is_train):
+                            image = cv2.imread(img_file)
+                            mask = cv2.imread(mask_file)
+                            
+                            if image is None or mask is None:
+                                logger.error(f"Failed to load image/mask pair: {img_file}")
+                                continue
+                                
+                            try:
+                                with open(ann_file, 'r') as f:
+                                    annotation = f.read()
+                                yield (image, mask, annotation, is_train, base_name)
+                            except Exception as e:
+                                logger.error(f"Error reading annotation {ann_file}: {str(e)}")
+                    del image, mask, annotation
+                    gc.collect()
+
+        return triplet_generator(), file_count
+                    
 
     def apply_white_balance(self, image):
         scale_factors = np.random.uniform(0.7, 1.2, size=(3,))
@@ -224,101 +348,85 @@ class AugmentImage:
             "status": "Processing" if progress < 100 else "Completed"
         }
 
-    def start_augmentation(self, data):
+    def start_augmentation(self, data: Dict[str, Any]) -> Dict[str, str]:
         try:
-            logger.info("Augmentation started...")
-            self.stop = False
+            self.clear_redis_cache()
             self.clear_output_directories()
+            
+            self.stop = False
             self._processed_files = 0
-            self._total_files = 0
-            number_of_images = data.get("number_of_images", None)
+            number_of_images = data.get("number_of_images")
+            BATCH_SIZE = 10
+
+            train_gen, train_count = self.get_image_triplets(is_train=True)
+            val_gen, val_count = self.get_image_triplets(is_train=False)
             
-            train_triplets = list(self.get_image_triplets(is_train=True))
-            if number_of_images is not None and number_of_images > 0:
-                train_triplets = train_triplets[:number_of_images]
-                
-            val_triplets = list(self.get_image_triplets(is_train=False))
-            if number_of_images is not None and number_of_images > 0:
-                val_triplets = val_triplets[:number_of_images]
-                
-            self._total_files = len(train_triplets) + len(val_triplets)
-            
-            for img_file, mask_file, ann_file, is_train in train_triplets:
-                if self.stop:
-                    logger.info("Augmentation stopped by user")
-                    self.clear_output_directories()
+            self._total_files = min(train_count + val_count, number_of_images) if number_of_images else train_count + val_count
+
+            def process_batch(batch: List[Tuple], is_train: bool) -> None:
+                for image, mask, annotation, _, base_name in batch:
+                    if self.stop:
+                        return
+
+                    if data.get("white_balance"):
+                        image = self.apply_white_balance(image)
+                    if data.get("blur"):
+                        image = self.apply_blur(image)
+                    if data.get("brightness"):
+                        image = self.apply_brightness(image)
+                    if data.get("rotate"):
+                        image, mask = self.apply_rotation(image, mask)
+                    if data.get("shift"):
+                        image, mask = self.apply_shift(image, mask)
+                    if data.get("noise"):
+                        image = self.apply_noise(image)
+                    if data.get("change_background"):
+                        image = self.apply_background_change(image, mask)
+                    if data.get("qr_code"):
+                        image = self.qr_code(image)
+
+                    self.save_data(
+                        image=image,
+                        mask=mask,
+                        method="combined",
+                        txt_op="memory",
+                        txt_file=None,
+                        base_name=base_name,
+                        is_train=is_train,
+                        annotation=annotation
+                    )
+                    self._processed_files += 1
+                    
+                    del image, mask, annotation
+                    gc.collect()
+
+            batch = []
+            for i, triplet in enumerate(train_gen):
+                if number_of_images and i >= number_of_images // 2:
                     break
-                
-                base_name = os.path.splitext(os.path.basename(img_file))[0]
-                image = cv2.imread(img_file)
-                mask = cv2.imread(mask_file)
-        
-                if image is None or mask is None:
-                    continue
-        
-                if data.get("white_balance"):
-                    image = self.apply_white_balance(image)
-                if data.get("blur"):
-                    image = self.apply_blur(image)
-                if data.get("brightness"):
-                    image = self.apply_brightness(image)
-                if data.get("rotate"):
-                    image, mask = self.apply_rotation(image, mask)
-                if data.get("shift"):
-                    image, mask = self.apply_shift(image, mask)
-                if data.get("noise"):
-                    image = self.apply_noise(image)
-                if data.get("change_background"):
-                    image = self.apply_background_change(image, mask)
-                if data.get("qr_code"):
-                    image = self.qr_code(image)
-        
-                self.save_data(image, mask, method="combined", txt_op="copy", 
-                             txt_file=ann_file, base_name=base_name, is_train=True)
-                self._processed_files += 1
-                
-            for img_file, mask_file, ann_file, is_train in val_triplets:
-                if self.stop:
-                    logger.info("Augmentation stopped by user")
-                    self.clear_output_directories()
+                batch.append(triplet)
+                if len(batch) >= BATCH_SIZE:
+                    process_batch(batch, is_train=True)
+                    batch = []
+            if batch:
+                process_batch(batch, is_train=True)
+
+            batch = []
+            for i, triplet in enumerate(val_gen):
+                if number_of_images and i >= number_of_images // 2:
                     break
-                
-                base_name = os.path.splitext(os.path.basename(img_file))[0]
-                image = cv2.imread(img_file)
-                mask = cv2.imread(mask_file)
-        
-                if image is None or mask is None:
-                    continue
-        
-                if data.get("white_balance"):
-                    image = self.apply_white_balance(image)
-                if data.get("blur"):
-                    image = self.apply_blur(image)
-                if data.get("brightness"):
-                    image = self.apply_brightness(image)
-                if data.get("rotate"):
-                    image, mask = self.apply_rotation(image, mask)
-                if data.get("shift"):
-                    image, mask = self.apply_shift(image, mask)
-                if data.get("noise"):
-                    image = self.apply_noise(image)
-                if data.get("change_background"):
-                    image = self.apply_background_change(image, mask)
-                if data.get("qr_code"):
-                    image = self.qr_code(image)
-        
-                self.save_data(image, mask, method="combined", txt_op="copy", 
-                             txt_file=ann_file, base_name=base_name, is_train=False)
-                self._processed_files += 1
-                
-            logger.info("Successful augmentation.")
-            return {
-                "status": "success"
-            }
-        except HTTPException:
-            raise
+                batch.append(triplet)
+                if len(batch) >= BATCH_SIZE:
+                    process_batch(batch, is_train=False)
+                    batch = []
+            if batch:
+                process_batch(batch, is_train=False)
+
+            logger.info(f"Augmentation completed. Processed {self._processed_files} files.")
+            return {"status": "success"}
+
         except Exception as e:
-            logger.error(str(e))
+            logger.error(f"Augmentation failed: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)
