@@ -5,6 +5,8 @@ import numpy as np
 import os
 import shutil
 import re
+import redis
+import pickle
 
 from fastapi import HTTPException, status
 from skimage.feature import local_binary_pattern
@@ -21,6 +23,23 @@ class StreamImage():
         self.total = 0
         self.is_processing = False
         self.selected_mode = ""
+        
+        self.redis = redis.Redis(
+            host="redis",
+            port=AppConfig.REDIS_PORT,
+            db=3,
+            decode_responses=False
+        )
+        self.cache_prefix = "stream_img:"
+        
+    def serialize_image(self, image: np.ndarray) -> bytes:
+        return pickle.dumps(image)
+    
+    def deserialize_image(self, image_bytes: bytes) -> np.ndarray:
+        return pickle.loads(image_bytes)
+    
+    def get_cache_key(self, operation: str, filename: str) -> str:
+        return f"{self.cache_prefix}{operation}:{filename}"
     
     def extract_pill_name(self, filename: str) -> str:
         match = re.match(r'^(.+?)_[su]_', filename)
@@ -135,7 +154,7 @@ class StreamImage():
     
     async def change_background(self):
         try:
-            logger.info("Changing image backgrounds...")
+            logger.info("Changing image backgrounds with Redis caching...")
              
             os.makedirs(AppConfig.CONSUMER_IMAGES_WO_BG, exist_ok=True)
             os.makedirs(AppConfig.REFERENCE_IMAGES_WO_BG, exist_ok=True)
@@ -143,23 +162,22 @@ class StreamImage():
             for mode in ["consumer", "reference"]:
                 paths = self.path_selector(mode)
                 image_files = [f for f in os.listdir(paths["images"]) if f.endswith('.jpg')]
-                mask_files = [f for f in os.listdir(paths["masks"]) if f.endswith('.jpg')]
                 
-                image_mask_pairs = []
-                for img_file in image_files:
-                    mask_file = img_file
-                    if mask_file in mask_files:
-                        pill_name = self.extract_pill_name(img_file)
-                        original_img_path = os.path.join(paths["images"], pill_name, img_file)
-                        original_mask_path = os.path.join(paths["masks"], pill_name, mask_file)
-                        
-                        if os.path.exists(original_img_path) and os.path.exists(original_mask_path):
-                            image_mask_pairs.append((img_file, mask_file))
-                        
                 bg_color = (145, 145, 151)
                 
-                for img_file, mask_file in image_mask_pairs:
+                for img_file in image_files:
+                    cache_key = self.get_cache_key("bg_change", img_file)
                     pill_name = self.extract_pill_name(img_file)
+                    output_dir = AppConfig.CONSUMER_IMAGES_WO_BG if mode == "consumer" else AppConfig.REFERENCE_IMAGES_WO_BG
+                    output_path = os.path.join(self.ensure_pill_directory(output_dir, img_file), img_file)
+                    
+                    cached_img = self.redis.get(cache_key)
+                    if cached_img:
+                        with open(output_path, 'wb') as f:
+                            f.write(cached_img)
+                        continue
+                    
+                    mask_file = img_file
                     img_path = os.path.join(paths["images"], pill_name, img_file)
                     mask_path = os.path.join(paths["masks"], pill_name, mask_file)
                     
@@ -170,23 +188,16 @@ class StreamImage():
                     mask = cv2.threshold(mask, 128, 255, cv2.THRESH_BINARY)[1].astype(np.uint8)
                     
                     background = np.ones(image.shape, dtype=np.uint8)
-                    background[:, :, 0] = bg_color[0]
-                    background[:, :, 1] = bg_color[1]
-                    background[:, :, 2] = bg_color[2]
+                    background[:, :] = bg_color
                     
                     foreground = cv2.bitwise_and(image, image, mask=mask)
-                    
                     background = cv2.bitwise_and(background, background, mask=cv2.bitwise_not(mask))
-                    
                     output_image = cv2.add(foreground, background)
                     
-                    output_dir = AppConfig.CONSUMER_IMAGES_WO_BG if mode == "consumer" else AppConfig.REFERENCE_IMAGES_WO_BG
-                    output_pill_dir = self.ensure_pill_directory(output_dir, img_file)
-                    output_path = os.path.join(output_pill_dir, img_file)
                     cv2.imwrite(output_path, output_image)
+                    self.redis.set(cache_key, self.serialize_image(output_image), ex=86400)
             
             return {"status": "success"}
-            
         
         except Exception as e:
             logger.error(f"Error during background change: {str(e)}")
@@ -282,11 +293,26 @@ class StreamImage():
     def process_image(self, image_paths: Tuple[str, str], rgb_path: str) -> None:
         color_path, mask_path = image_paths
         output_name = os.path.basename(color_path)
+        cache_key = self.get_cache_key("rgb", output_name)
+        
+        cached_img = self.redis.get(cache_key)
+        if cached_img:
+            output_pill_dir = self.ensure_pill_directory(rgb_path, output_name)
+            with open(os.path.join(output_pill_dir, output_name), 'wb') as f:
+                f.write(cached_img)
+            self.processed += 1
+            self.progress = int((self.processed / self.total) * 100)
+            return
+        
         output_pill_dir = self.ensure_pill_directory(rgb_path, output_name)
         output_file = os.path.join(output_pill_dir, output_name)
         color_img = cv2.imread(str(color_path), 1)
         mask_img = cv2.imread(str(mask_path), 0)
+        
         self.draw_bounding_box(color_img, mask_img, output_file)
+        
+        with open(output_file, 'rb') as f:
+            self.redis.set(cache_key, f.read(), ex=86400)
         
         self.processed += 1
         self.progress = int((self.processed / self.total) * 100)
@@ -311,20 +337,31 @@ class StreamImage():
     def create_contour_images(self, args) -> None:
         try:
             cropped_image, output_path = args
+            output_name = os.path.basename(output_path)
+            cache_key = self.get_cache_key("contour", output_name)
+            
+            cached_img = self.redis.get(cache_key)
+            if cached_img:
+                with open(output_path, 'wb') as f:
+                    f.write(cached_img)
+                self.processed += 1
+                self.progress = int((self.processed / self.total) * 100)
+                return
+                
             if cropped_image is None:
-                self.is_processing = False
-                logger.error("Failed to read input image.")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to read input image."
+                    detail="Failed to read input image."
                 )
                 
             blurred_img = cv2.GaussianBlur(cropped_image, (7, 7), 0)
             edges = cv2.Canny(blurred_img, 10, 30)
             success = cv2.imwrite(output_path, edges)
             
-            if not success:
-                logger.error("Failed to write image to {output_path}")
+            if success:
+                with open(output_path, 'rb') as f:
+                    self.redis.set(cache_key, f.read(), ex=86400)
+            else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to write image to {output_path}"
@@ -333,11 +370,8 @@ class StreamImage():
             self.processed += 1
             self.progress = int((self.processed / self.total) * 100)
         except Exception as e:
-            logger.error("Error processing contour image: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error processing contour image: {str(e)}"
-            )
+            logger.error(f"Error processing contour image: {str(e)}")
+            raise
         
     def save_contour_images(self, rgb_path: str, contour_path: str) -> None:
         args_list = []
@@ -362,11 +396,25 @@ class StreamImage():
             
     def create_texture_images(self, args) -> None:
         cropped_image, output_path = args
+        output_name = os.path.basename(output_path)
+        cache_key = self.get_cache_key("texture", output_name)
+        
+        if self.redis.exists(cache_key):
+            with open(output_path, 'wb') as f:
+                f.write(self.redis.get(cache_key))
+            self.processed += 1
+            self.progress = int((self.processed / self.total) * 100)
+            return
+            
         blurred_img = cv2.GaussianBlur(cropped_image, (7, 7), 0)
         blurred_img = cv2.GaussianBlur(blurred_img, (15, 15), 0)
         sub_img = cv2.subtract(cropped_image, blurred_img)
-        cv2.imwrite(output_path, sub_img * 15)
+        result = sub_img * 15
         
+        cv2.imwrite(output_path, result)
+        with open(output_path, 'rb') as f:
+            self.redis.set(cache_key, f.read(), ex=86400)
+            
         self.processed += 1
         self.progress = int((self.processed / self.total) * 100)
         
@@ -393,10 +441,23 @@ class StreamImage():
             
     def process_lbp_image(self, args) -> None:
         img_gray, dst_image_path = args
+        output_name = os.path.basename(dst_image_path)
+        cache_key = self.get_cache_key("lbp", output_name)
+        
+        if self.redis.exists(cache_key):
+            with open(dst_image_path, 'wb') as f:
+                f.write(self.redis.get(cache_key))
+            self.processed += 1
+            self.progress = int((self.processed / self.total) * 100)
+            return
+            
         lbp_image = local_binary_pattern(image=img_gray, P=8, R=2, method="default")
         lbp_image = np.clip(lbp_image, 0, 255)
-        cv2.imwrite(dst_image_path, lbp_image)
         
+        cv2.imwrite(dst_image_path, lbp_image)
+        with open(dst_image_path, 'rb') as f:
+            self.redis.set(cache_key, f.read(), ex=86400)
+            
         self.processed += 1
         self.progress = int((self.processed / self.total) * 100)
         
@@ -420,6 +481,23 @@ class StreamImage():
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
             futures = [executor.submit(self.process_lbp_image, args) for args in args_list]
             concurrent.futures.wait(futures)
+            
+    def clear_cache(self, mode: str = None):
+        try:
+            if mode:
+                keys = self.redis.keys(f"{self.cache_prefix}{mode}:*")
+            else:
+                keys = self.redis.keys(f"{self.cache_prefix}*")
+                
+            if keys:
+                self.redis.delete(*keys)
+            logger.info(f"Cleared Redis cache for {mode if mode else 'all operations'}")
+        except Exception as e:
+            logger.error(f"Error clearing Redis cache: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error clearing Redis cache: {str(e)}"
+            )
         
     def start_stream_images(self, data: Dict[str, any]):
         logger.info("Creating Stream Images")
@@ -486,6 +564,8 @@ class StreamImage():
         try:
             paths = self.path_selector(self.selected_mode)
             
+            self.clear_cache(self.selected_mode)
+            
             for output_type in ["rgb", "contour", "texture", "lbp"]:
                 if os.path.exists(paths[output_type]):
                     for root, dirs, files in os.walk(paths[output_type]):
@@ -496,19 +576,9 @@ class StreamImage():
                                     os.unlink(file_path)
                             except Exception as e:
                                 logger.error(f"Failed to delete {file_path}: {str(e)}")
-                        for dir in dirs:
-                            dir_path = os.path.join(root, dir)
-                            try:
-                                if os.path.isdir(dir_path) and not os.listdir(dir_path):
-                                    os.rmdir(dir_path)
-                            except Exception as e:
-                                logger.error(f"Failed to delete directory {dir_path}: {str(e)}")
                         
-            logger.info(f"Cleared output directories for {self.selected_mode} mode")
+            logger.info(f"Cleared output directories and cache for {self.selected_mode} mode")
             
         except Exception as e:
-            logger.error(f"Error clearing output directories: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error clearing output directories: {str(e)}"
-            )
+            logger.error(f"Error clearing output: {str(e)}")
+            raise

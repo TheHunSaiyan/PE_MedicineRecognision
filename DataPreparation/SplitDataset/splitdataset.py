@@ -6,6 +6,8 @@ import cv2
 from fastapi import HTTPException, status
 from math import floor
 import numpy as np
+import redis
+import pickle
 from pydantic import BaseModel
 from typing import Dict, List, Tuple
 
@@ -17,6 +19,13 @@ class SplitDataset:
         self._progress = 0
         self._total_files = 0
         self._processed_files = 0
+        self.redis = redis.Redis(
+            host='redis',
+            port=AppConfig.REDIS_PORT,
+            db=2,
+            decode_responses=False
+        )
+        self.mask_cache_prefix = "mask_gen:"
     
     async def get_progress(self):
         logger.info({
@@ -32,17 +41,20 @@ class SplitDataset:
     
     async def get_data_availability(self):
         def get_file_count(path):
-            if os.path.exists(path) and os.path.isdir(path):
-                return len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
-            return 0
+            return len([f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]) if os.path.exists(path) else 0
         
         def is_valid_mask(mask_path):
             try:
+                base_name = os.path.splitext(os.path.basename(mask_path))[0]
+                cache_key = f"{self.mask_cache_prefix}{base_name}"
+                
+                if self.redis.exists(cache_key):
+                    return True
+                    
                 mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
                 if mask is None:
                     return False
-                unique_values = np.unique(mask)
-                return set(unique_values).issubset({0, 255})
+                return set(np.unique(mask)).issubset({0, 255})
             except Exception as e:
                 logger.error(f"Error validating mask {mask_path}: {str(e)}")
                 return False
@@ -51,21 +63,23 @@ class SplitDataset:
         label_count = get_file_count(AppConfig.ORIGINAL_LABELS)
         mask_count = get_file_count(AppConfig.ORIGINAL_MASKS)
         
+        redis_mask_count = len(self.redis.keys(f"{self.mask_cache_prefix}*"))
+        total_mask_count = max(mask_count, redis_mask_count)
+        
         valid_mask_count = 0
         if mask_count > 0:
             for mask_file in os.listdir(AppConfig.ORIGINAL_MASKS):
                 mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, mask_file)
                 if is_valid_mask(mask_path):
                     valid_mask_count += 1
-                else:
-                    logger.warning(f"Invalid mask found: {mask_file}")
         
-        if (mask_count == 0 or valid_mask_count != img_count or 
+        valid_mask_count = max(valid_mask_count, redis_mask_count)
+        
+        if (total_mask_count == 0 or valid_mask_count != img_count or 
             valid_mask_count != label_count) and img_count > 0 and label_count > 0:
-            logger.info("Missing or invalid masks found, generating masks from images and labels...")
+            logger.info("Missing or invalid masks found, generating masks...")
             await self.generate_masks_from_labels()
-            mask_count = get_file_count(AppConfig.ORIGINAL_MASKS)
-            valid_mask_count = mask_count
+            valid_mask_count = img_count
         
         counts_equal = len({img_count, label_count, valid_mask_count}) == 1
         
@@ -74,22 +88,43 @@ class SplitDataset:
             "segmentation_labels": label_count > 0 and counts_equal,
             "mask_images": valid_mask_count > 0 and counts_equal
         }
+
+    def clear_mask_cache(self):
+        keys = self.redis.keys(f"{self.mask_cache_prefix}*")
+        if keys:
+            self.redis.delete(*keys)
+        logger.info("Cleared mask cache")
         
+    def serialize_mask(self, mask: np.ndarray) -> bytes:
+        return pickle.dumps(mask)
+    
+    def deserialize_mask(self, mask_bytes: bytes) -> np.ndarray:
+        return pickle.loads(mask_bytes)
+    
     async def generate_masks_from_labels(self):
         os.makedirs(AppConfig.ORIGINAL_MASKS, exist_ok=True)
         
         for img_file in os.listdir(AppConfig.ORIGINAL_IMAGES):
-                
             img_path = os.path.join(AppConfig.ORIGINAL_IMAGES, img_file)
+            base_name = os.path.splitext(img_file)[0]
+            cache_key = f"{self.mask_cache_prefix}{base_name}"
+            
+            cached_mask = self.redis.get(cache_key)
+            if cached_mask:
+                mask = self.deserialize_mask(cached_mask)
+                mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, f"{base_name}.jpg")
+                cv2.imwrite(mask_path, mask)
+                logger.info(f"Loaded mask from cache: {base_name}")
+                continue
+                
             img = cv2.imread(img_path)
             if img is None:
                 continue
                 
             height, width = img.shape[:2]
-            
             mask = np.zeros((height, width), dtype=np.uint8)
             
-            label_file = os.path.splitext(img_file)[0] + '.txt'
+            label_file = f"{base_name}.txt"
             label_path = os.path.join(AppConfig.ORIGINAL_LABELS, label_file)
             
             if not os.path.exists(label_path):
@@ -112,11 +147,11 @@ class SplitDataset:
                     
                     cv2.fillPoly(mask, [np.array(polygon)], color=255)
             
-            mask_file = os.path.splitext(img_file)[0] + '.png'
-            mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, mask_file)
-            cv2.imwrite(mask_path, mask)
+            self.redis.set(cache_key, self.serialize_mask(mask), ex=86400)
             
-            logger.info(f"Generated mask: {mask_path}")
+            mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, f"{base_name}.jpg")
+            cv2.imwrite(mask_path, mask)
+            logger.info(f"Generated and cached mask: {base_name}")
         
     def start_split(self, data: Dict[str, any]):
         logger.info("Spliting dataset started...")
@@ -167,14 +202,14 @@ class SplitDataset:
                 for dir_path in split.values():
                     os.makedirs(dir_path, exist_ok=True)
             
-            self._clear_split_directories(split_dirs)
+            self.clear_split_directories(split_dirs)
             
             image_files = [f for f in os.listdir(image_dir) if f.endswith('.jpg')]
             self._total_files = len(image_files) * 3
             
             if segregated:
-                class_images = self._group_by_class(image_files)
-                train_images, val_images, test_images = self._split_by_class(
+                class_images = self.group_by_class(image_files)
+                train_images, val_images, test_images = self.split_by_class(
                     class_images, train_pct, val_pct, test_pct)
             else:
                 random.shuffle(image_files)
@@ -213,9 +248,9 @@ class SplitDataset:
                 
                 self._total_files = (len(train_images) + len(val_images) + len(test_images)) * 3
             
-            self._move_files(train_images, image_dir, seg_label_dir, mask_dir, split_dirs['train'])
-            self._move_files(val_images, image_dir, seg_label_dir, mask_dir, split_dirs['val'])
-            self._move_files(test_images, image_dir, seg_label_dir, mask_dir, split_dirs['test'])
+            self.move_files(train_images, image_dir, seg_label_dir, mask_dir, split_dirs['train'])
+            self.move_files(val_images, image_dir, seg_label_dir, mask_dir, split_dirs['val'])
+            self.move_files(test_images, image_dir, seg_label_dir, mask_dir, split_dirs['test'])
             
             logger.info("Successfull split.")
             return {
@@ -235,7 +270,7 @@ class SplitDataset:
                 detail=f"Error during dataset split: {str(e)}"
             )
     
-    def _clear_split_directories(self, split_dirs: Dict[str, Dict[str, str]]):
+    def clear_split_directories(self, split_dirs: Dict[str, Dict[str, str]]):
         for split in split_dirs.values():
             for dir_path in split.values():
                 for item in os.listdir(dir_path):
@@ -245,7 +280,7 @@ class SplitDataset:
                     elif os.path.isdir(item_path):
                         shutil.rmtree(item_path)
     
-    def _group_by_class(self, image_files: List[str]) -> Dict[str, List[str]]:
+    def group_by_class(self, image_files: List[str]) -> Dict[str, List[str]]:
         class_images = {}
         for filename in image_files:
             parts = filename.split('_')
@@ -256,7 +291,7 @@ class SplitDataset:
             class_images[class_name].append(filename)
         return class_images
     
-    def _split_by_class(self, class_images: Dict[str, List[str]], 
+    def split_by_class(self, class_images: Dict[str, List[str]], 
                        train_pct: int, val_pct: int, test_pct: int) -> Tuple[List[str], List[str], List[str]]:
         train_images = []
         val_images = []
@@ -274,7 +309,7 @@ class SplitDataset:
         
         return train_images, val_images, test_images
     
-    def _move_files(self, image_files: List[str], 
+    def move_files(self, image_files: List[str], 
                    src_img_dir: str, src_label_dir: str, src_mask_dir: str,
                    dest_dirs: Dict[str, str]):
         for img_file in image_files:
@@ -333,7 +368,7 @@ class SplitDataset:
             for split in split_dirs.values():
                 for dir_path in split.values():
                     if os.path.exists(dir_path):
-                        self._clear_directory_contents(dir_path)
+                        self.clear_directory_contents(dir_path)
             
             return {"status": "stopped", "message": "Split operation stopped and directory contents cleared"}
         except Exception as e:
@@ -343,7 +378,7 @@ class SplitDataset:
                 detail=f"Error during stop: {str(e)}"
             )
 
-    def _clear_directory_contents(self, dir_path: str):
+    def clear_directory_contents(self, dir_path: str):
         max_retries = 3
         
         for attempt in range(max_retries):
