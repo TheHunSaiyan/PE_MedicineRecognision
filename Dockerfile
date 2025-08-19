@@ -25,6 +25,7 @@ RUN pip3 install bcrypt
 RUN pip3 install python-jose[cryptography] passlib
 RUN pip3 install PyJWT
 RUN pip3 install redis
+RUN pip3 install scipy
 
 
 COPY . .

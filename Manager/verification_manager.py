@@ -1,20 +1,30 @@
+import cv2
 import json
 import logging
 import os
+
 from datetime import datetime
 from typing import Optional, Dict, Any
-
-import cv2
 from ultralytics import YOLO
 
+from Config.config import AppConfig
 from Controllers.camera_controller import CameraController
 from Controllers.led_controller import LEDController
 from Logger.logger import logger
-from Config.config import AppConfig
 
 
 class VerificationManager:
     def __init__(self, camera: CameraController, led: LEDController):
+        """
+        Initialize the VerificationManager with camera and LED controllers.
+
+        Args:
+            camera (CameraController): Controller for camera operations.
+            led (LEDController): Controller for LED lighting control.
+
+        Returns:
+            None
+        """
         self.camera = camera
         self.led = led
         self.unanticipated_object = False
@@ -30,6 +40,15 @@ class VerificationManager:
         }
 
     async def initialize(self):
+        """
+        Initialize the verification system components.
+
+        Args:
+            None
+
+        Returns:
+            bool: True if initialization succeeded, False otherwise.
+        """
         try:
             self.geometry = await self._initialize_geometry_file()
             self.model = await self._initialize_model()
@@ -40,6 +59,16 @@ class VerificationManager:
             return False
 
     async def _initialize_geometry_file(self) -> Optional[Dict]:
+        """
+        Load geometry configuration from JSON file.
+
+        Args:
+            None
+
+        Returns:
+            Optional[Dict]: Geometry configuration dictionary if successful,
+                           None if file not found or invalid.
+        """
         geometry_path = AppConfig.GEOMETRY_COORDS
         geometry_file = os.path.join(geometry_path, "geometry.json")
 
@@ -55,6 +84,16 @@ class VerificationManager:
             return None
 
     async def _initialize_model(self) -> Optional[YOLO]:
+        """
+        Load YOLO object detection model from weights file.
+
+        Args:
+            None
+
+        Returns:
+            Optional[YOLO]: Initialized YOLO model instance if successful,
+                           None if model file not found or invalid.
+        """
         model_path = AppConfig.ENVIRONMENT_WEIGHTS
         latest_model_file = os.path.join(model_path, "yolov11n_env.pt")
 
@@ -69,6 +108,17 @@ class VerificationManager:
             return None
 
     async def analyze_environment(self, expected_holder_id: str, lamp_mode: str = "upper") -> Dict[str, Any]:
+        """
+        Analyze the dispensing environment for verification readiness.
+
+        Args:
+            expected_holder_id (str): Expected QR code value for validation.
+            lamp_mode (str, optional): Lighting mode - "upper" or "side".
+                                     Defaults to "upper".
+
+        Returns:
+            Dict[str, Any]: Analysis results.
+        """
         if not self.initialized:
             return {"status": False, "message": "Verification system not initialized"}
 
@@ -76,11 +126,11 @@ class VerificationManager:
             brightness = 100 if lamp_mode == "upper" else 80
             pin = 11 if lamp_mode == "upper" else 9
             self.led.set_values(brightness, pin)
-            
+
             frame = self.camera.get_frame()
             if frame is None:
                 raise RuntimeError("Failed to capture frame")
-            
+
             results = self.model(frame)
             predicted_label = results[0].names[results[0].probs.top1]
 
@@ -91,7 +141,8 @@ class VerificationManager:
                 }
 
             qr_detector = cv2.QRCodeDetector()
-            retval, decoded_qrs, points, _ = qr_detector.detectAndDecodeMulti(frame)
+            retval, decoded_qrs, points, _ = qr_detector.detectAndDecodeMulti(
+                frame)
 
             if not retval or not decoded_qrs:
                 return {

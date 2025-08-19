@@ -3,15 +3,26 @@ import json
 import random
 import shutil
 import threading
-from typing import Dict, List
 
 from fastapi import HTTPException, status
+from typing import Dict, List
 
 from Config.config import AppConfig
 from Logger.logger import logger
 
+
 class KFoldSort:
     def __init__(self):
+        """
+        Initializes the class instance with configuration parameters and state variables.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+
         self.progress = {
             "progress": 0,
             "processed": 0,
@@ -27,11 +38,21 @@ class KFoldSort:
         self.train_output_dir = AppConfig.K_FOLD_TRAIN
         self.test_output_dir = AppConfig.K_FOLD_TEST
         self.subfolders = ["rgb", "texture", "contour", "lbp"]
-        
+
     async def get_fold(self, data: Dict):
+        """
+        Asynchronously retrieves or generates k-fold data splits.
+
+        Args:
+            data (Dict): A dictionary containing configuration options.
+
+        Returns:
+            dict: A dictionary containing the number of folds
+        """
+
         load = data.get("load", False)
         num_folds = int(data.get("num_folds", 5))
-        
+
         if not load:
             self.kfold_data = self.generate_folds(num_folds)
             logger.info(f"Generated {num_folds} new folds")
@@ -39,7 +60,7 @@ class KFoldSort:
             self.kfold_data = self.load_folds()
             num_folds = len(self.kfold_data)
             logger.info(f"Loaded {num_folds} existing folds")
-            
+
         return {
             "num_folds": num_folds,
             "status": "success",
@@ -47,6 +68,16 @@ class KFoldSort:
         }
 
     def start_sorting(self, data: Dict):
+        """
+        Sorts and organizes image data into k-fold train and test sets based on the selected fold.
+
+        Args:
+            data (Dict): Dictionary containing configuration for sorting. Must include 'selected_fold' key.
+
+        Returns:
+            None
+        """
+
         selected_fold = data.get("selected_fold", "fold1")
         erase = True
 
@@ -69,32 +100,33 @@ class KFoldSort:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Selected fold '{selected_fold}' not found."
             )
-            
+
         test_classes = self.kfold_data[selected_fold]
         train_classes = [
-            cls 
-            for fold_name, class_list in self.kfold_data.items() 
+            cls
+            for fold_name, class_list in self.kfold_data.items()
             if fold_name != selected_fold
             for cls in class_list
         ]
         all_classes = list(set(train_classes + test_classes))
 
         with self.lock:
-            self.progress["total"] = len(all_classes) * len(self.subfolders) * 2
+            self.progress["total"] = len(
+                all_classes) * len(self.subfolders) * 2
 
         for class_name in all_classes:
             is_test = class_name in test_classes
-            
+
             self.copy_class_images(
-                class_name, 
+                class_name,
                 test=is_test,
                 source_dir=AppConfig.CONSUMER_STREAM_IMAGES,
                 test_dest=AppConfig.K_FOLD_TEST_QUERY,
                 train_dest=AppConfig.K_FOLD_TRAIN_ANCHOR
             )
-            
+
             self.copy_class_images(
-                class_name, 
+                class_name,
                 test=is_test,
                 source_dir=AppConfig.REFERENCE_STREAM_IMAGES,
                 test_dest=AppConfig.K_FOLD_TEST_REF,
@@ -103,17 +135,38 @@ class KFoldSort:
 
             with self.lock:
                 self.progress["processed"] += len(self.subfolders) * 2
-                self.progress["progress"] = int((self.progress["processed"] / self.progress["total"]) * 100)
+                self.progress["progress"] = int(
+                    (self.progress["processed"] / self.progress["total"]) * 100)
 
         with self.lock:
             self.progress["status"] = "done"
 
     async def get_sort_progress(self) -> Dict:
+        """
+        Asynchronously retrieves the current progress of the sorting operation.
+
+        Args:
+            None
+
+        Returns:
+            Dict: A dictionary containing the current progress information.
+        """
+
         with self.lock:
             logger.info(self.progress)
             return self.progress
 
     def generate_folds(self, num_folds: int) -> Dict[str, List[str]]:
+        """
+        Generates k folds from a list of medication classes for cross-validation.
+
+        Args:
+            num_folds (int): The number of folds to generate.
+
+        Returns:
+            Dict[str, List[str]]: A dictionary mapping fold names (e.g., "fold1") to lists of class names.
+        """
+
         try:
             with open(self.data_list_file, 'r') as f:
                 data = json.load(f)
@@ -144,6 +197,16 @@ class KFoldSort:
         return folds
 
     def load_folds(self) -> Dict[str, List[str]]:
+        """
+        Loads fold information from a saved 'kfolds.txt' file.
+
+        Args:
+            None
+
+        Returns:
+            Dict[str, List[str]]: A dictionary where keys are fold names and values are lists of class names.
+        """
+
         file_path = os.path.join(self.k_fold_dir, "kfolds.txt")
         if not os.path.exists(file_path):
             logger.error("No saved fold file found.")
@@ -162,6 +225,16 @@ class KFoldSort:
         return folds
 
     def erase_existing(self):
+        """
+        Removes existing subfolders within the train and test output directories, then recreates them.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+
         for path in [self.train_output_dir, self.test_output_dir]:
             for sub in self.subfolders:
                 full_path = os.path.join(path, sub)
@@ -169,7 +242,22 @@ class KFoldSort:
                     shutil.rmtree(full_path)
                 os.makedirs(full_path, exist_ok=True)
 
-    def copy_class_images(self, class_name: str, test: bool, source_dir: str, test_dest: str, train_dest: str):
+    def copy_class_images(self, class_name: str, test: bool, source_dir: str,
+                          test_dest: str, train_dest: str):
+        """
+        Copy image files for a specific class to either test or train directories.
+
+        Args:
+            class_name (str): The name of the medication class to copy images for.
+            test (bool): Flag indicating whether this class is for testing (True) 
+                        or training (False) in the current fold.
+            source_dir (str): Source directory containing the subfolders with images.
+            test_dest (str): Destination root directory for test images.
+            train_dest (str): Destination root directory for train images.
+
+        Returns:
+            None
+        """
         dst_root = test_dest if test else train_dest
 
         for sub in self.subfolders:
