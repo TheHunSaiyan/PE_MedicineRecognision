@@ -45,6 +45,43 @@ const [availability, setAvailability] = useState<DataAvailability>({
       total: 0
     });
   const { enqueueSnackbar } = useSnackbar();
+  const [dataSuccess, setDataSuccess] = useState(false);
+  const [modeSelected, setModeSelected] = useState(false);
+  const [stopEnabled, setStopEnabled] = useState(false);
+
+  const stopStream = async () => {
+  try {
+    const response = await fetch('http://localhost:2076/stop_stream_image', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to stop stream image process');
+    }
+
+    const result = await response.json();
+    if (result.status === 'success') {
+      setIsProcessing(false);
+      setStopEnabled(false);
+      setProgress(0);
+      enqueueSnackbar('Process stopped successfully and output directories cleared', { 
+        variant: 'info',
+        autoHideDuration: 10000
+      });
+    } else {
+      enqueueSnackbar(result.message, { 
+        variant: 'warning',
+        autoHideDuration: 10000
+      });
+    }
+  } catch (error) {
+    console.error('Error stopping stream image process:', error);
+    enqueueSnackbar('Error stopping process', { 
+      variant: 'error',
+      autoHideDuration: 10000
+    });
+  }
+};
 
   const handleMissingData = async (currentData: DataAvailability) => {
     try {
@@ -106,6 +143,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
         }
         
         setSuccess(true);
+        setDataSuccess(true);
       } catch (err) {
         setAvailabilityError(err instanceof Error ? err.message : 'An unknown error occurred');
       } finally {
@@ -117,6 +155,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
   }, []);
 
     const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      setModeSelected(true);
       setSelectedMode(event.target.value);
     };
 
@@ -127,6 +166,7 @@ const [availability, setAvailability] = useState<DataAvailability>({
     }
 
     setIsProcessing(true);
+    setStopEnabled(true);
     setStreamError(null);
 
     try {
@@ -143,9 +183,17 @@ const [availability, setAvailability] = useState<DataAvailability>({
         }
         
     } catch (err) {
+        setStopEnabled(false);
+        setIsProcessing(false);
         setStreamError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
 };
+
+useEffect(() => {
+  if (progress >= 100) {
+    setStopEnabled(false);
+  }
+}, [progress]);
 
    useEffect(() => {
       let intervalId: NodeJS.Timeout;
@@ -296,15 +344,27 @@ const [availability, setAvailability] = useState<DataAvailability>({
               />
               </div>
               <br></br>
+              <div style={{display: 'flex', marginTop: '20px', marginLeft: '10px', flexDirection: 'column' }}>
               <Button 
                 variant="contained" 
                 color="primary" 
                 onClick={startSplit}
-                style={{ marginTop: '20px' }}
-                disabled={isProcessing && selectedMode==''}
+                style={{ flex: '1', marginBottom: '20px' }}
+                disabled={isProcessing || !(modeSelected) || !(dataSuccess)}
               >
                 {isProcessing && availabilitySuccess ? 'Processing...' : 'Start'}
               </Button>
+              <br></br>
+              <Button 
+                variant="contained" 
+                color="error" 
+                onClick={stopStream}
+                style={{ flex:'1' }}
+                disabled={!stopEnabled}
+              >
+                Stop
+              </Button>
+              </div>
               <div>
                 <br></br>
               </div>

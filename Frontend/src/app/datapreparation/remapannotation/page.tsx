@@ -20,6 +20,31 @@ const CameraApp: React.FC = () => {
   const [filesSelected, setFilesSelected] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedMode, setSelectedMode] = useState('');
+  const [stopEnabled, setStopEnabled] = useState(false);
+
+  const stopRemap = async () => {
+  try {
+    const response = await fetch('http://localhost:2076/stop_remap_annotation', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to stop remap process');
+    }
+
+    const result = await response.json();
+    if (result.status === 'success') {
+      setIsProcessing(false);
+      setStopEnabled(false);
+      alert('Process stopped successfully');
+    } else {
+      alert(result.message);
+    }
+  } catch (error) {
+    console.error('Error stopping remap:', error);
+    alert('Error stopping process');
+  }
+};
 
   const handleFolderSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -44,6 +69,7 @@ const CameraApp: React.FC = () => {
     if (!filesSelected || isProcessing) return;
     
     setIsProcessing(true);
+    setStopEnabled(true);
     setProgress(0);
     
     try {
@@ -59,6 +85,7 @@ const CameraApp: React.FC = () => {
       });
 
       if (!response.ok) {
+        setStopEnabled(false);
         throw new Error('Failed to start remap process');
       }
 
@@ -66,6 +93,7 @@ const CameraApp: React.FC = () => {
         try {
           const progressResponse = await fetch('http://localhost:2076/get_remap_annotation_progress');
           if (!progressResponse.ok) {
+            setStopEnabled(false);
             throw new Error('Failed to get progress');
           }
           const progressData = await progressResponse.json();
@@ -79,11 +107,13 @@ const CameraApp: React.FC = () => {
           setProgress(progressData.progress);
           
           if (progressData.progress >= 100) {
+            setStopEnabled(false);
             clearInterval(intervalId);
             setIsProcessing(false);
           }
         } catch (error) {
           console.error('Error fetching progress:', error);
+          setStopEnabled(false);
           clearInterval(intervalId);
           setIsProcessing(false);
         }
@@ -91,6 +121,7 @@ const CameraApp: React.FC = () => {
 
     } catch (error) {
       console.error('Error starting remap:', error);
+      setStopEnabled(false);
       setIsProcessing(false);
     }
   };
@@ -163,15 +194,27 @@ const CameraApp: React.FC = () => {
                         label="Segmentation"
                       />
         <br></br>
+        <div style={{display: 'flex', marginTop: '20px', marginLeft: '10px', flexDirection: 'column' }}>
         <Button 
           variant="contained" 
           color="primary" 
           onClick={startRemap}
-          style={{ marginTop: '20px', marginBottom: '20px' }}
+          style={{ flex: '1', marginBottom: '20px' }}
           disabled={!filesSelected || isProcessing || !selectedMode}
         >
           {isProcessing ? 'Processing...' : 'Start'}
         </Button>
+        <br></br>
+        <Button 
+          variant="contained" 
+          color="error" 
+          onClick={stopRemap}
+          style={{flex: '1'}}
+          disabled={!stopEnabled}
+        >
+          Stop
+        </Button>
+        </div>
         <br></br>
         <LinearProgress variant="determinate" value={progress} style={{width: '100%'}} />
         {progress > 0 && progress < 100 && (

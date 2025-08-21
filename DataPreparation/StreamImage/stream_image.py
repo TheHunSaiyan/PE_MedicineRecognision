@@ -14,6 +14,7 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple
 
 from Config.config import AppConfig
+from DataPreparation.CreateMask.createmask import CreateMask
 from Logger.logger import logger
 
 
@@ -42,6 +43,7 @@ class StreamImage():
             decode_responses=False
         )
         self.cache_prefix = "stream_img:"
+        self.createmask = CreateMask()
 
     def serialize_image(self, image: np.ndarray) -> bytes:
         """
@@ -117,6 +119,7 @@ class StreamImage():
     async def get_data_availability(self):
         """
         Asynchronously checks the availability of various image data directories and their contents.
+        Generates masks if they don't exist or are invalid.
 
         Args:
             None
@@ -125,22 +128,106 @@ class StreamImage():
             Dict[str, bool]: A dictionary indicating the availability of each data type.
         """
 
+        def is_valid_mask(mask_path):
+            """Check if a mask file is valid (contains only 0 and 255 values)"""
+            try:
+                mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if mask is None:
+                    return False
+                return set(np.unique(mask)).issubset({0, 255})
+            except Exception:
+                return False
+
+        images_available = os.path.exists(AppConfig.ORIGINAL_IMAGES) and bool(
+            os.listdir(AppConfig.ORIGINAL_IMAGES))
+
+        if not images_available:
+            return {
+                "images": False,
+                "mask_images": False,
+                "split": False,
+                "background_changed": False
+            }
+
+        masks_available = False
+        if os.path.exists(AppConfig.ORIGINAL_MASKS) and os.listdir(AppConfig.ORIGINAL_MASKS):
+            valid_mask_count = 0
+            for mask_file in os.listdir(AppConfig.ORIGINAL_MASKS):
+                mask_path = os.path.join(AppConfig.ORIGINAL_MASKS, mask_file)
+                if is_valid_mask(mask_path):
+                    valid_mask_count += 1
+
+            image_count = len([f for f in os.listdir(AppConfig.ORIGINAL_IMAGES)
+                               if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))])
+            masks_available = (valid_mask_count == image_count)
+
+        if not masks_available:
+            logger.info(
+                "Masks missing or invalid, generating masks from labels...")
+            await self.generate_masks_from_labels()
+            masks_available = True
+
+        split_available = (
+            os.path.exists(AppConfig.CONSUMER_IMAGES) and
+            os.path.exists(AppConfig.REFERENCE_IMAGES) and
+            bool(os.listdir(AppConfig.CONSUMER_IMAGES)) and
+            bool(os.listdir(AppConfig.REFERENCE_IMAGES))
+        )
+
+        background_changed_available = (
+            os.path.exists(AppConfig.CONSUMER_IMAGES_WO_BG) and
+            os.path.exists(AppConfig.REFERENCE_IMAGES_WO_BG) and
+            bool(os.listdir(AppConfig.CONSUMER_IMAGES_WO_BG)) and
+            bool(os.listdir(AppConfig.REFERENCE_IMAGES_WO_BG))
+        )
+
         return {
-            "images": os.path.exists(AppConfig.ORIGINAL_IMAGES) and bool(os.listdir(AppConfig.ORIGINAL_IMAGES)),
-            "mask_images": os.path.exists(AppConfig.ORIGINAL_MASKS) and bool(os.listdir(AppConfig.ORIGINAL_MASKS)),
-            "split": (
-                os.path.exists(AppConfig.CONSUMER_IMAGES) and
-                os.path.exists(AppConfig.REFERENCE_IMAGES) and
-                bool(os.listdir(AppConfig.CONSUMER_IMAGES)) and
-                bool(os.listdir(AppConfig.REFERENCE_IMAGES))
-            ),
-            "background_changed": (
-                os.path.exists(AppConfig.CONSUMER_IMAGES_WO_BG) and
-                os.path.exists(AppConfig.REFERENCE_IMAGES_WO_BG) and
-                bool(os.listdir(AppConfig.CONSUMER_IMAGES_WO_BG)) and
-                bool(os.listdir(AppConfig.REFERENCE_IMAGES_WO_BG))
-            )
+            "images": images_available,
+            "mask_images": masks_available,
+            "split": split_available,
+            "background_changed": background_changed_available
         }
+
+    async def generate_masks_from_labels(self):
+        """
+        Generate masks from segmentation labels using CreateMask class.
+
+        Returns:
+            None
+        """
+        logger.info("Generating masks from labels...")
+
+        os.makedirs(AppConfig.ORIGINAL_MASKS, exist_ok=True)
+
+        image_files = [f for f in os.listdir(AppConfig.ORIGINAL_IMAGES)
+                       if f.lower().endswith('.jpg')]
+
+        for img_file in image_files:
+            img_path = os.path.join(AppConfig.ORIGINAL_IMAGES, img_file)
+            base_name = os.path.splitext(img_file)[0]
+
+            label_file = f"{base_name}.txt"
+            label_path = os.path.join(AppConfig.ORIGINAL_LABELS, label_file)
+
+            if not os.path.exists(label_path):
+                logger.warning(f"No label file found for {img_file}")
+                continue
+
+            try:
+                mask = self.createmask.process_data(
+                    img_path, label_path, scale_factor=4)
+
+                if mask is None:
+                    logger.error(f"Failed to create mask for {img_file}")
+                    continue
+
+                self.createmask.save_masks(
+                    mask, img_path, AppConfig.ORIGINAL_MASKS)
+                logger.info(f"Generated mask: {base_name}")
+
+            except Exception as e:
+                logger.error(f"Error processing {img_file}: {str(e)}")
+                continue
 
     async def split_consumer_reference(self):
         """
@@ -310,6 +397,38 @@ class StreamImage():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error during background change: {str(e)}"
+            )
+
+    async def stop_stream_image(self) -> Dict[str, str]:
+        """
+        Stop the current stream image creation process and clean up output directories.
+
+        Args:
+            None
+
+        Returns:
+            Dict[str, str]: A dictionary indicating the status of the operation.
+        """
+        if not self.is_processing:
+            return {"status": "error", "message": "No stream image process is currently running"}
+
+        try:
+            self.is_processing = False
+
+            self.clear_output()
+
+            self.progress = 0
+            self.processed = 0
+            self.total = 0
+
+            logger.info(
+                "Stream image process stopped by user request and output directories cleaned")
+            return {"status": "success", "message": "Stream image process stopped successfully and output directories cleared"}
+        except Exception as e:
+            logger.error(f"Error stopping stream image process: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error stopping stream image process: {str(e)}"
             )
 
     def path_selector(self, mode: str) -> dict:
@@ -580,8 +699,12 @@ class StreamImage():
                     detail="Failed to read input image."
                 )
 
-            blurred_img = cv2.GaussianBlur(cropped_image, (7, 7), 0)
-            edges = cv2.Canny(blurred_img, 10, 30)
+            gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+            grad_x = cv2.Sobel(gray, cv2.CV_16S, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray, cv2.CV_16S, 0, 1, ksize=3)
+            abs_grad_x = cv2.convertScaleAbs(grad_x)
+            abs_grad_y = cv2.convertScaleAbs(grad_y)
+            edges = cv2.addWeighted(abs_grad_x, 1.5, abs_grad_y, 2.5, 0)
             success = cv2.imwrite(output_path, edges)
 
             if success:
@@ -622,7 +745,8 @@ class StreamImage():
                     os.makedirs(contour_pill_dir, exist_ok=True)
                     output_path = os.path.join(contour_pill_dir, img_file)
 
-                    args_list.append((cv2.imread(img_path, 0), output_path))
+                    args_list.append(
+                        (cv2.imread(img_path, cv2.IMREAD_COLOR), output_path))
 
         self.total = len(args_list)
         self.processed = 0

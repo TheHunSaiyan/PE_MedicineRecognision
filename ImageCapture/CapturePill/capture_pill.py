@@ -86,7 +86,8 @@ class CapturePill:
                     detail="No frame available"
                 )
 
-            filename = f"{pill_name}_{next_image_number:03d}_{lamp_position[0]}_{pill_side[0]}.jpg"
+            filename = f"{pill_name}_{next_image_number:03d} \
+            _{lamp_position[0]}_{pill_side[0]}.jpg"
             filepath = pill_dir / filename
 
             cv2.imwrite(str(filepath), frame, [

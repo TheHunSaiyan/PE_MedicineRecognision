@@ -67,6 +67,22 @@ class KFoldSort:
             "message": "Folds loaded/generated successfully"
         }
 
+    async def stop_sort(self):
+        """
+        Stop the current sorting process
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        with self.lock:
+            self._should_stop = True
+            self.progress["status"] = "stopping"
+
+        return {"status": "stopped", "message": "Sorting process stopped"}
+
     def start_sorting(self, data: Dict):
         """
         Sorts and organizes image data into k-fold train and test sets based on the selected fold.
@@ -84,6 +100,7 @@ class KFoldSort:
         logger.info("Starting sort...")
 
         with self.lock:
+            self._should_stop = False
             self.progress = {
                 "progress": 0,
                 "processed": 0,
@@ -115,6 +132,13 @@ class KFoldSort:
                 all_classes) * len(self.subfolders) * 2
 
         for class_name in all_classes:
+
+            with self.lock:
+                if self._should_stop:
+                    logger.info("Sorting stopped by user")
+                    self.progress["status"] = "stopped"
+                    return
+
             is_test = class_name in test_classes
 
             self.copy_class_images(
@@ -261,6 +285,10 @@ class KFoldSort:
         dst_root = test_dest if test else train_dest
 
         for sub in self.subfolders:
+            with self.lock:
+                if self._should_stop:
+                    return
+
             src_subfolder = os.path.join(source_dir, sub)
             dst_class_folder = os.path.join(dst_root, sub, class_name)
 
@@ -270,6 +298,10 @@ class KFoldSort:
             os.makedirs(dst_class_folder, exist_ok=True)
 
             for file_name in os.listdir(src_subfolder):
+                with self.lock:
+                    if self._should_stop:
+                        return
+
                 if not file_name.lower().startswith(class_name.lower()):
                     continue
 

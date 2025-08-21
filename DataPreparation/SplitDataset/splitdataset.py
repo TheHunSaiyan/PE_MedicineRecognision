@@ -15,6 +15,7 @@ from scipy.interpolate import splprep, splev
 from typing import Dict, List, Tuple
 
 from Config.config import AppConfig
+from DataPreparation.CreateMask.createmask import CreateMask
 from Logger.logger import logger
 
 
@@ -39,6 +40,7 @@ class SplitDataset:
             decode_responses=False
         )
         self.mask_cache_prefix = "mask_gen:"
+        self.createmask = CreateMask()
 
     async def get_progress(self):
         """
@@ -178,7 +180,7 @@ class SplitDataset:
 
     async def generate_masks_from_labels(self, interp_points: int = 100):
         """
-        Generate masks from segmentation labels and cache them in Redis.
+        Generate masks from segmentation labels using CreateMask class and cache them in Redis.
 
         Args:
             interp_points (int): Number of interpolation points for smoothing the mask.
@@ -188,10 +190,20 @@ class SplitDataset:
         """
         os.makedirs(AppConfig.ORIGINAL_MASKS, exist_ok=True)
 
-        for img_file in os.listdir(AppConfig.ORIGINAL_IMAGES):
+        image_files = [f for f in os.listdir(AppConfig.ORIGINAL_IMAGES)
+                       if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+
+        self._total_files = len(image_files)
+        self._processed_files = 0
+
+        for img_file in image_files:
             img_path = os.path.join(AppConfig.ORIGINAL_IMAGES, img_file)
             base_name = os.path.splitext(img_file)[0]
             cache_key = f"{self.mask_cache_prefix}{base_name}"
+
+            self._processed_files += 1
+            self._progress = int(
+                (self._processed_files / self._total_files) * 100)
 
             cached_mask = self.redis.get(cache_key)
             if cached_mask:
@@ -206,54 +218,21 @@ class SplitDataset:
             label_path = os.path.join(AppConfig.ORIGINAL_LABELS, label_file)
 
             if not os.path.exists(label_path):
+                logger.warning(f"No label file found for {img_file}")
                 continue
 
             try:
-                with Image.open(img_path) as img:
-                    img_width, img_height = img.size
+                mask = self.createmask.process_data(
+                    img_path, label_path, scale_factor=4)
 
-                with open(label_path, "r") as file:
-                    lines = file.readlines()
+                if mask is None:
+                    logger.error(f"Failed to create mask for {img_file}")
+                    continue
 
-                mask = Image.new('L', (img_width, img_height), 0)
-                draw = ImageDraw.Draw(mask)
+                self.redis.set(cache_key, self.serialize_mask(mask), ex=86400)
 
-                for line in lines:
-                    parts = line.strip().split()
-                    if len(parts) < 5:
-                        continue
-
-                    class_id = int(parts[0])
-                    yolo_coords = [float(x) for x in parts[1:]]
-
-                    coords = []
-                    for i, coord in enumerate(yolo_coords):
-                        if i % 2 == 0:
-                            coords.append(coord * img_width)
-                        else:
-                            coords.append(coord * img_height)
-                    coords = np.array(coords).reshape(-1, 2)
-
-                    if len(coords) > 3:
-                        x, y = coords[:, 0], coords[:, 1]
-                        tck, _ = splprep([x, y], s=0, per=True)
-                        u_new = np.linspace(0, 1, interp_points)
-                        x_new, y_new = splev(u_new, tck)
-                        coords_interp = list(zip(x_new, y_new))
-                    else:
-                        coords_interp = coords.tolist()
-
-                    draw.polygon(coords_interp, outline=255, fill=255)
-
-                mask = mask.filter(ImageFilter.GaussianBlur(radius=2))
-                mask_array = (np.array(mask) > 0).astype(np.uint8) * 255
-
-                self.redis.set(cache_key, self.serialize_mask(
-                    mask_array), ex=86400)
-
-                mask_path = os.path.join(
-                    AppConfig.ORIGINAL_MASKS, f"{base_name}.jpg")
-                cv2.imwrite(mask_path, mask_array)
+                self.create_mask.save_masks(
+                    mask, img_path, AppConfig.ORIGINAL_MASKS)
                 logger.info(f"Generated and cached mask: {base_name}")
 
             except Exception as e:

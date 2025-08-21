@@ -29,26 +29,58 @@ const [progressInfo, setProgressInfo] = useState({
   });
 const [snackbarOpen, setSnackbarOpen] = useState(false);
 const [foldDataLoaded, setFoldDataLoaded] = useState(false);
+const [isStopping, setIsStopping] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (isProcessing) {
       interval = setInterval(async () => {
-        const response = await fetch('http://localhost:2076/get_sort_process');
-        const data = await response.json();
-        setProgress(data.progress);
-        setProgressInfo(data);
-        if (data.progress >= 100) {
-          setIsProcessing(false);
-          setSnackbarOpen(true)
-          clearInterval(interval);
+        try {
+          const response = await fetch('http://localhost:2076/get_sort_process');
+          const data = await response.json();
+          setProgress(data.progress);
+          setProgressInfo(data);
+          
+          if (data.progress >= 100 || data.status === "stopped") {
+            setIsProcessing(false);
+            if (data.status === "stopped") {
+              setError("Sorting stopped by user");
+            } else {
+              setSnackbarOpen(true);
+            }
+            clearInterval(interval);
+          }
+        } catch (err) {
+          console.error('Error fetching progress:', err);
         }
       }, 1000);
     }
 
     return () => clearInterval(interval);
   }, [isProcessing]);
+
+const stopSorting = async () => {
+    setIsStopping(true);
+    try {
+      const response = await fetch('http://localhost:2076/stop_sort', {
+        method: 'POST',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to stop sorting');
+      }
+      
+      setIsProcessing(false);
+      setIsStopping(false);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stop sorting');
+      setIsStopping(false);
+    }
+  };
 
 const handleModeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setfoldMode(event.target.value);
@@ -242,6 +274,15 @@ const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                 disabled={!foldDataLoaded || isProcessing}
               >
                 {isProcessing ? 'Processing...' : 'Start'}
+              </Button>
+              <Button 
+                variant="contained" 
+                color="error" 
+                onClick={stopSorting}
+                style={{ marginTop: '10px' }}
+                disabled={!isProcessing || isStopping}
+              >
+                {isStopping ? 'Stopping...' : 'Stop Sorting'}
               </Button>
               <div>
                 <br></br>

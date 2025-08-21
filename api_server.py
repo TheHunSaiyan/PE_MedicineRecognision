@@ -614,6 +614,19 @@ class APIServer:
             """
             return await self.stream_image.get_progress()
 
+        @self.app.post("/stop_stream_image")
+        async def stop_stream_image():
+            """
+            Stop the current image streaming process.
+
+            Args:
+                None
+
+            Returns:
+                None
+            """
+            return await self.stream_image.stop_stream_image()
+
         @self.app.post("/get_fold")
         async def get_fold(data: Dict[str, Any]):
             """
@@ -655,6 +668,19 @@ class APIServer:
             """
             return await self.kfoldsort.get_sort_progress()
 
+        @self.app.post("/stop_sort")
+        async def stop_sort():
+            """
+            Stop the current sorting process.
+
+            Args:
+                None
+
+            Returns:
+                None
+            """
+            return await self.kfoldsort.stop_sort()
+
         @self.app.post("/start_remap_annotation")
         async def start_remap(files: List[UploadFile] = File(...), mode: Optional[str] = Body(None)):
             """
@@ -681,6 +707,19 @@ class APIServer:
                 Dict[str, Any]: A dictionary containing the progress of the remapping.
             """
             return await self.remapannotation.get_progress()
+
+        @self.app.post("/stop_remap_annotation")
+        async def stop_remap_annotation():
+            """
+            Stop the current remap annotation.
+
+            Args:
+                None
+
+            Returns:
+                None
+            """
+            return await self.remapannotation.stop_remap_annotation()
 
         @self.app.post("/initialization")
         async def initialization():

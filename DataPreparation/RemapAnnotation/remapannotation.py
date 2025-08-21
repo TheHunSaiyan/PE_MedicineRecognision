@@ -41,6 +41,35 @@ class RemapAnnotation:
         with open(json_file, 'r') as file:
             self.data = json.load(file)
 
+    async def stop_remap_annotation(self) -> Dict[str, str]:
+        """
+        Stop the current remap annotation process.
+
+        Args:
+            None
+
+        Returns:
+            Dict[str, str]: A dictionary indicating the status of the operation.
+        """
+        if not self.processing:
+            return {"status": "error", "message": "No process is currently running"}
+
+        try:
+            self.processing = False
+            self.current_file_index = 0
+            self.total_files = 0
+            self.files_to_process = []
+            self._clean_output_directory()
+
+            logger.info("Remap annotation process stopped by user request")
+            return {"status": "success", "message": "Remap annotation process stopped successfully"}
+        except Exception as e:
+            logger.error(f"Error stopping remap annotation: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error stopping remap annotation: {str(e)}"
+            )
+
     def _find_real_id(self, class_name: str) -> int:
         """
         Find the real ID corresponding to a class name from the loaded medication data.

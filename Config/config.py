@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 class AppConfig:
     JWT_SECRET_KEY = "6cee5413be1ed9b11531617a2c798ece"
     JWT_ALGORITHM = "HS256"
@@ -44,7 +45,7 @@ class AppConfig:
     CONSUMER_CONTOUR = "Data/Consumer/stream_images/contour"
     CONSUMER_LBP = "Data/Consumer/stream_images/lbp"
     CONSUMER_RGB = "Data/Consumer/stream_images/rgb"
-    CONSUMER_TEXTURE = "Data/Consumer/stream_images/texture"    
+    CONSUMER_TEXTURE = "Data/Consumer/stream_images/texture"
     REFERENCE_STREAM_IMAGES = "Data/Reference/stream_images"
     REFERENCE_CONTOUR = "Data/Reference/stream_images/contour"
     REFERENCE_LBP = "Data/Reference/stream_images/lbp"
@@ -66,4 +67,5 @@ class AppConfig:
     VERIF_IMAGES = "Data/Verif_Images"
     ENVIRONMENT_WEIGHTS = "Data/Environment_Weights"
     GEOMETRY_COORDS = "Data/Geometry_Coords"
-    
+    DATASET = "Data/Dataset"
+    SEGMENTATION_WEIGHTS = "Data/SegmentationWeights"
