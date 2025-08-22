@@ -60,7 +60,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (response.ok) {
         setUserRole(data.role as Role);
         setIsAuthenticated(true);
-        router.push('/mainpage');
       } else {
         throw new Error(data.detail || 'Login failed');
       }

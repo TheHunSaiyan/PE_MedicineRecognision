@@ -10,9 +10,23 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
-import { Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Snackbar, Typography } from '@mui/material';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { ROLES } from '../../../constans/roles';
+
+interface Medication {
+  pill_name: string;
+  count: number;
+}
+
+interface MedicationsData {
+  medications: {
+    dispensing_bay_1: Medication[];
+    dispensing_bay_2: Medication[];
+    dispensing_bay_3: Medication[];
+    dispensing_bay_4: Medication[];
+  };
+}
 
 const CameraApp: React.FC = () => {
   const [language, setLanguage] = useState('hu');
@@ -21,6 +35,11 @@ const CameraApp: React.FC = () => {
   const [environmentStatus, setEnvironmentStatus] = useState<boolean | null>(null);
   const [environmentMessage, setEnvironmentMessage] = useState<string>('');
   const [isCheckingEnvironment, setIsCheckingEnvironment] = useState(false);
+  const [recipeSelected, setRecipeSelected] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [medicationsData, setMedicationsData] = useState<MedicationsData | null>(null);
+  const [referenceImages, setReferenceImages] = useState<Record<string, any>>({});
 
   const translations = {
     en: {
@@ -43,7 +62,10 @@ const CameraApp: React.FC = () => {
       mainPage: "Main Page",
       language: "Language",
       initializing: "Initializing...",
-      initializationError: "Error during incicialization!"
+      initializationError: "Error during incicialization!",
+      recipeUploadSuccess: "Recipe uploaded successfully!",
+      recipeUploadError: "Error uploading recipe: ",
+      noFileSelected: "Please select a JSON file first"
     },
     hu: {
       title: "Gyógyszeradagolás ellenőrzése",
@@ -65,7 +87,10 @@ const CameraApp: React.FC = () => {
       mainPage: "Főmenü",
       language: "Nyelv",
       initializing: "Inicializálás...",
-      initializationError: "Hiba inicianilázás közben!"
+      initializationError: "Hiba inicianilázás közben!",
+      recipeUploadSuccess: "Recept sikeresen feltöltve!",
+      recipeUploadError: "Hiba a recept feltöltésekor: ",
+      noFileSelected: "Kérjük, válasszon ki egy JSON fájlt"
     }
   };
 
@@ -170,6 +195,159 @@ const CameraApp: React.FC = () => {
     );
   }
 
+ const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (file.type !== 'application/json') {
+    setSnackbar({
+      open: true,
+      message: t.recipeUploadError + (language === 'hu' ? 'Csak JSON fájlok engedélyezettek' : 'Only JSON files are allowed'),
+      severity: 'error'
+    });
+    return;
+  }
+
+  try {
+    const fileContent = await readFileAsText(file);
+    const jsonData = JSON.parse(fileContent);
+
+    if (!jsonData.medications || 
+        !jsonData.medications.dispensing_bay_1 || 
+        !jsonData.medications.dispensing_bay_2 || 
+        !jsonData.medications.dispensing_bay_3 || 
+        !jsonData.medications.dispensing_bay_4) {
+      throw new Error(language === 'hu' ? 'Érvénytelen JSON formátum' : 'Invalid JSON format');
+    }
+
+    const response = await fetch('http://localhost:2076/selected_recipe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jsonData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    setMedicationsData(jsonData);
+    
+    setRecipeSelected(true);
+    setSnackbar({
+      open: true,
+      message: t.recipeUploadSuccess,
+      severity: 'success'
+    });
+
+    await fetchReferenceImages(jsonData);
+
+  } catch (error) {
+    console.error('Error uploading recipe:', error);
+    setSnackbar({
+      open: true,
+      message: t.recipeUploadError + (error instanceof Error ? error.message : 'Unknown error'),
+      severity: 'error'
+    });
+  }
+};
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  };
+
+  const handleSelectRecipeClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+   const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const formatPillName = (pillName: string): string => {
+    return pillName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  const fetchReferenceImages = async (medicationsDataParam?: MedicationsData) => {
+  const dataToUse = medicationsDataParam || medicationsData;
+  if (!dataToUse) return;
+
+  try {
+    const response = await fetch('http://localhost:2076/get_recipe_reference_images', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(dataToUse)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setReferenceImages(data);
+    }
+  } catch (error) {
+    console.error('Error fetching reference images:', error);
+  }
+};
+
+const renderMedicationTable = (medications: Medication[], bayName: string) => {
+  if (!medications || medications.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={3} align="center">
+          {language === 'hu' ? 'Nincs adat' : 'No data'}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return medications.map((medication, index) => {
+    const pillImages = referenceImages[bayName]?.[index]?.images || [];
+    const firstImage = pillImages[0];
+
+    return (
+      <TableRow key={index}>
+        <TableCell>{formatPillName(medication.pill_name)}</TableCell>
+        <TableCell align="right">{medication.count}</TableCell>
+        <TableCell align="right">
+          {firstImage ? (
+            <img 
+              src={`http://localhost:2076${firstImage}`}
+              alt={medication.pill_name}
+              style={{ 
+                width: '50px', 
+                height: '50px', 
+                objectFit: 'cover',
+                borderRadius: '4px'
+              }}
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <span style={{ color: '#999', fontStyle: 'italic' }}>
+              {language === 'hu' ? 'Nincs kép' : 'No image'}
+            </span>
+          )}
+        </TableCell>
+      </TableRow>
+    );
+  });
+};
+
   return (
     <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN, ROLES.NURSE, ROLES.DOCTOR]}>
       <div className="camera-container" style={{
@@ -179,6 +357,25 @@ const CameraApp: React.FC = () => {
         minHeight: '100vh',
         position: 'relative'
       }}>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept=".json"
+          style={{ display: 'none' }}
+        />
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert onClose={handleSnackbarClose} severity={snackbar.severity as any} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+
         <div style={{ position: 'absolute', right: '20px', top: '20px' }}>
           <FormControl size="small" variant="outlined">
             <InputLabel>{t.language}</InputLabel>
@@ -225,18 +422,20 @@ const CameraApp: React.FC = () => {
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Button variant="contained">{t.selectRecipe}</Button>
+            <Button variant="contained" onClick={handleSelectRecipeClick}>
+              {t.selectRecipe}
+            </Button>
             <FormControlLabel
-              control={<Checkbox checked={false} disabled />}
+              control={<Checkbox checked={recipeSelected} disabled />}
               sx={{
                 '& .MuiSvgIcon-root': {
-                  color: false ? '#04e762' : '#ef233c',
+                  color: recipeSelected ? '#04e762' : '#ef233c',
                   fontSize: 28,
                 },
               }}
               label={
                 <span style={{
-                  color: false ? '#04e762' : '#ef233c',
+                  color: recipeSelected ? '#04e762' : '#ef233c',
                   fontWeight: 'bold'
                 }}>
                   {t.recipe}
@@ -262,17 +461,19 @@ const CameraApp: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {medicationsData ? renderMedicationTable(medicationsData.medications.dispensing_bay_1, 'dispensing_bay_1') : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          {language === 'hu' ? 'Nincs adat' : 'No data'}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <Typography>{t.predictionLabel}</Typography>
-            </div>
+                <Typography>{t.predictionLabel}</Typography>
+              </div>
               <TableContainer component={Paper} style={{ minHeight: '200px' }}>
                 <Table>
                   <TableHead>
@@ -310,17 +511,19 @@ const CameraApp: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {medicationsData ? renderMedicationTable(medicationsData.medications.dispensing_bay_2, 'dispensing_bay_2') : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          {language === 'hu' ? 'Nincs adat' : 'No data'}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <Typography>{t.predictionLabel}</Typography>
-            </div>
+                <Typography>{t.predictionLabel}</Typography>
+              </div>
               <TableContainer component={Paper} style={{ minHeight: '200px' }}>
                 <Table>
                   <TableHead>
@@ -358,17 +561,19 @@ const CameraApp: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {medicationsData ? renderMedicationTable(medicationsData.medications.dispensing_bay_3, 'dispensing_bay_3') : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          {language === 'hu' ? 'Nincs adat' : 'No data'}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <Typography>{t.predictionLabel}</Typography>
-            </div>
+                <Typography>{t.predictionLabel}</Typography>
+              </div>
               <TableContainer component={Paper} style={{ minHeight: '200px' }}>
                 <Table>
                   <TableHead>
@@ -406,17 +611,19 @@ const CameraApp: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {medicationsData ? renderMedicationTable(medicationsData.medications.dispensing_bay_4, 'dispensing_bay_4') : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          {language === 'hu' ? 'Nincs adat' : 'No data'}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <Typography>{t.predictionLabel}</Typography>
-            </div>
+                <Typography>{t.predictionLabel}</Typography>
+              </div>
               <TableContainer component={Paper} style={{ minHeight: '200px' }}>
                 <Table>
                   <TableHead>

@@ -106,6 +106,9 @@ class APIServer:
             name="captured-images"
         )
 
+        self.app.mount(
+            "/verif_images", StaticFiles(directory=AppConfig.VERIF_IMAGES), name="verif_images")
+
     def setup_routes(self):
         """
         Set up the API routes for various functionalities such as camera control,
@@ -746,6 +749,55 @@ class APIServer:
                 Dict[str, Any]: A dictionary containing the result of the environment check.
             """
             return await self.dispenseverification.check_environment(data.get("holder_id", ""))
+
+        @self.app.post("/selected_recipe")
+        async def selected_recipe(data: Dict[str, Any]):
+            """
+            Store a selected medication recipe for dispensing.
+
+            Args:
+                data: Medication recipe data in the format:
+                    {
+                        "medications": {
+                            "dispensing_bay_1": [
+                                {"pill_name": "medication_name", "count": 5},
+                                ...
+                            ],
+                            "dispensing_bay_2": [...],
+                            ...
+                        }
+                    }
+
+            Returns:
+                dict: Status message and recipe summary
+            """
+            return await self.dispenseverification.selected_recipe(data)
+
+        @self.app.post("/get_recipe_reference_images")
+        async def get_recipe_reference_images(recipe_data: dict = None):
+            """
+            Get reference images for all pills in the current recipe.
+
+            Args:
+                None
+
+            Returns:
+                dict: Reference images for all pills in the recipe
+            """
+            return await self.dispenseverification.get_recipe_reference_images(recipe_data)
+
+        @self.app.get("/get_pill_images/{pill_name}")
+        async def get_pill_images(pill_name: str):
+            """
+            Get reference images for a specific pill.
+
+            Args:
+                pill_name (str): The name of the pill
+
+            Returns:
+                dict: Reference images for the specified pill
+            """
+            return await self.dispenseverification.get_recipe_reference_images(pill_name)
 
         @self.app.get("/get_all_users")
         async def get_all_users():
