@@ -1,13 +1,20 @@
+import cv2
 import glob
+import numpy as np
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+import random
+import tempfile
+from typing import Any, Dict, List, Optional
 
 from fastapi import File, Form, HTTPException, UploadFile, status
+from pathlib import Path
+from ultralytics import YOLO
 
 from Config.config import AppConfig
 from Controllers.camera_controller import CameraController
 from Controllers.led_controller import LEDController
+from DataPreparation.CreateMask.createmask import CreateMask
 from Logger.logger import logger
 from Manager.verification_manager import VerificationManager
 from Models.recipe import Recipe, Medication
@@ -32,6 +39,8 @@ class DispenseVerification:
         self.verification_manager = VerificationManager(camera, led)
         self.initialized = False
         self.recipe: Recipe = None
+        self.yolo_model = YOLO(str(Path(AppConfig.SEGMENTATION_WEIGHTS)))
+        logger.info(self.yolo_model.names)
 
     async def initialization(self):
         """
@@ -211,3 +220,202 @@ class DispenseVerification:
                 })
 
         return result
+
+    def get_random_background(self, background_root: Path, target_size):
+        """
+        Pick a random jpg background from nested dirs and resize to target_size.
+
+        Args:
+            background_root: The folder where the backgrounds are located,
+            target_size: The size the output image is supposed to be
+
+        Returns:
+            A resized background
+        """
+        all_backgrounds = list(background_root.rglob("*.jpg"))
+        if not all_backgrounds:
+            raise FileNotFoundError(
+                "No backgrounds found in BACKGROUND_IMAGES")
+
+        bg_path = random.choice(all_backgrounds)
+        bg = cv2.imread(str(bg_path))
+
+        if bg is None:
+            raise ValueError(f"Failed to read background {bg_path}")
+
+        return cv2.resize(bg, (target_size[0], target_size[1])), bg_path
+
+    async def verify_dispense(self, image: UploadFile = File(...)):
+        """
+        Verify that the dispensed medication matches the selected recipe.
+        Runs YOLO detection, extracts pill crops, assigns pills to bays,
+        and compares against the saved recipe.
+
+        Args:
+            image (UploadFile): Captured image of the pill dispenser.
+
+        Returns:
+            dict: Verification results with per-bay expected vs found pills.
+        """
+        if not self.recipe:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No recipe selected for verification"
+            )
+
+        try:
+            img_bytes = await image.read()
+            np_arr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            results = self.yolo_model(frame, verbose=False)
+
+            detected_medications = {"dispensing_bay_1": [],
+                                    "dispensing_bay_2": [], "dispensing_bay_3": [], "dispensing_bay_4": []}
+            img_h, img_w = frame.shape[:2]
+
+            bay_boundaries = [
+                (0, img_w * 0.35),
+                (img_w * 0.35, img_w * 0.50),
+                (img_w * 0.50, img_w * 0.65),
+                (img_w * 0.65, img_w)
+            ]
+
+            bay_names = ["dispensing_bay_1", "dispensing_bay_2",
+                         "dispensing_bay_3", "dispensing_bay_4"]
+
+            for r in results:
+                yolo_h, yolo_w = r.orig_shape
+                scale_x = img_w / yolo_w
+                scale_y = img_h / yolo_h
+
+                for box, cls_id in zip(r.boxes.xyxy, r.boxes.cls):
+                    x1, y1, x2, y2 = map(int, box.tolist())
+                    x1 = int(x1 * scale_x)
+                    x2 = int(x2 * scale_x)
+                    y1 = int(y1 * scale_y)
+                    y2 = int(y2 * scale_y)
+
+                    center_x = int((x1 + x2) / 2)
+                    bay = None
+                    for idx, (x_start, x_end) in enumerate(bay_boundaries):
+                        if x_start <= center_x < x_end:
+                            bay = bay_names[idx]
+                            break
+
+                    if bay is None:
+                        bay = bay_names[-1]
+
+                    pill_name = self.yolo_model.names[int(cls_id)]
+
+                    polygon = [
+                        (x1 / img_w, y1 / img_h),
+                        (x2 / img_w, y1 / img_h),
+                        (x2 / img_w, y2 / img_h),
+                        (x1 / img_w, y2 / img_h),
+                    ]
+                    txt_content = f"{int(cls_id)} " + \
+                        " ".join([f"{x} {y}" for (x, y) in polygon]) + "\n"
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_txt:
+                        tmp_txt.write(txt_content.encode("utf-8"))
+                        txt_path = tmp_txt.name
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_img:
+                        cv2.imwrite(tmp_img.name, frame)
+                        img_path = tmp_img.name
+
+                    mask = CreateMask.process_data(img_path, txt_path)
+                    os.makedirs(AppConfig.VERIF_MASKS, exist_ok=True)
+                    CreateMask.save_masks(
+                        mask, img_path, AppConfig.VERIF_MASKS)
+
+                    cutout = cv2.bitwise_and(frame, frame, mask=mask)
+                    pill_crop = cutout[y1:y2, x1:x2]
+
+                    output_dir = Path(AppConfig.VERIF_PILLS)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    filename = f"{pill_name}_{bay}_{x1}_{y1}.jpg"
+                    save_path = output_dir / filename
+                    cv2.imwrite(str(save_path), pill_crop)
+
+                    cutout_rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+                    cutout_rgba[:, :, 3] = mask
+
+                    pill_crop = cutout_rgba[y1:y2, x1:x2]
+
+                    bg_root = Path(AppConfig.BACKGROUND_IMAGES)
+                    background, chosen_bg_path = self.get_random_background(
+                        bg_root, (x2 - x1, y2 - y1))
+
+                    background_rgba = cv2.cvtColor(
+                        background, cv2.COLOR_BGR2BGRA)
+
+                    background, chosen_bg_path = self.get_random_background(
+                        Path(AppConfig.BACKGROUND_IMAGES), (img_w, img_h)
+                    )
+
+                    mask_rgb = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+
+                    pill_only = cv2.bitwise_and(frame, mask_rgb)
+
+                    mask_inv = cv2.bitwise_not(mask)
+                    mask_inv_rgb = cv2.cvtColor(mask_inv, cv2.COLOR_GRAY2BGR)
+
+                    bg_only = cv2.bitwise_and(background, mask_inv_rgb)
+
+                    overlay = cv2.add(pill_only, bg_only)
+
+                    output_dir = Path(AppConfig.VERIF_BACKGROUNDS)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    filename = f"{pill_name}_{bay}_{x1}_{y1}_bg.jpg"
+                    save_path = output_dir / filename
+                    cv2.imwrite(str(save_path), overlay)
+
+                    output_dir = Path(AppConfig.VERIF_BACKGROUNDS)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    filename = f"{pill_name}_{bay}_{x1}_{y1}_bg.jpg"
+                    save_path = output_dir / filename
+                    cv2.imwrite(str(save_path), overlay)
+
+                    detected_medications[bay].append(Medication(
+                        pill_name=pill_name,
+                        count=1
+                    ))
+
+            bays_result = []
+            for bay in bay_names:
+                expected = self.recipe.medications.get(bay, [])
+                found = detected_medications.get(bay, [])
+
+                match = (
+                    len(expected) == len(found) and
+                    all(e.pill_name == f.pill_name for e,
+                        f in zip(expected, found))
+                )
+
+                bays_result.append({
+                    "bay": bay,
+                    "expected": [m.dict() for m in expected],
+                    "found": [m.dict() for m in found],
+                    "match": match
+                })
+
+            correct = True
+            for bay in bays_result:
+                if not bay["match"]:
+                    correct = False
+                    break
+
+            return {
+                "status": True,
+                "bays": bays_result,
+                "verification_passed": correct
+            }
+
+        except Exception as e:
+            logger.error(f"Verification failed: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Verification failed: {str(e)}"
+            )

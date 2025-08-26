@@ -32,6 +32,7 @@ services:
       - ./Manager:/app/Manager
       - ./Models:/app/Models
       - ./Database:/app/Database
+      - ./Data/SegmentationWeights/best.pt:/app/weights/best.pt
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true

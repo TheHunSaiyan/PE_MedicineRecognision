@@ -28,6 +28,17 @@ interface MedicationsData {
   };
 }
 
+interface VerificationResult {
+  status: boolean;
+  bays: {
+    bay: string;
+    expected: Medication[];
+    found: Medication[];
+    match: boolean;
+  }[];
+  verification_passed: boolean;
+}
+
 const CameraApp: React.FC = () => {
   const [language, setLanguage] = useState('hu');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -40,6 +51,9 @@ const CameraApp: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [medicationsData, setMedicationsData] = useState<MedicationsData | null>(null);
   const [referenceImages, setReferenceImages] = useState<Record<string, any>>({});
+  const [isVerifying, setIsVerifying] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
 
   const translations = {
     en: {
@@ -65,7 +79,11 @@ const CameraApp: React.FC = () => {
       initializationError: "Error during incicialization!",
       recipeUploadSuccess: "Recipe uploaded successfully!",
       recipeUploadError: "Error uploading recipe: ",
-      noFileSelected: "Please select a JSON file first"
+      noFileSelected: "Please select a JSON file first",
+      imageUploadSuccess: "Image uploaded successfully!",
+      imageUploadError: "Error uploading image: ",
+      match: "Match",
+      mismatch: "Mismatch"
     },
     hu: {
       title: "Gyógyszeradagolás ellenőrzése",
@@ -90,7 +108,11 @@ const CameraApp: React.FC = () => {
       initializationError: "Hiba inicianilázás közben!",
       recipeUploadSuccess: "Recept sikeresen feltöltve!",
       recipeUploadError: "Hiba a recept feltöltésekor: ",
-      noFileSelected: "Kérjük, válasszon ki egy JSON fájlt"
+      noFileSelected: "Kérjük, válasszon ki egy JSON fájlt",
+      imageUploadSuccess: "Kép sikeresen feltöltve!",
+      imageUploadError: "Hiba a kép feltöltésekor: ",
+      match: "Egyezik",
+      mismatch: "Nem egyezik"
     }
   };
 
@@ -348,6 +370,116 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
   });
 };
 
+const handleVerifyDispenseClick = () => {
+    if (imageInputRef.current) {
+      imageInputRef.current.click();
+    }
+  };
+
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setSnackbar({
+        open: true,
+        message: t.imageUploadError + (language === 'hu' ? 'Csak képfájlok engedélyezettek' : 'Only image files are allowed'),
+        severity: 'error'
+      });
+      return;
+    }
+
+    try {
+      setIsVerifying(true);
+      
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('http://localhost:2076/verify_dispense', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result: VerificationResult = await response.json();
+      
+      setVerificationResult(result);
+      
+      setSnackbar({
+        open: true,
+        message: result.verification_passed 
+          ? (language === 'hu' ? 'Ellenőrzés sikeres' : 'Verification successful') 
+          : (language === 'hu' ? 'Ellenőrzés sikertelen' : 'Verification failed'),
+        severity: result.verification_passed ? 'success' : 'error'
+      });
+
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setSnackbar({
+        open: true,
+        message: t.imageUploadError + (error instanceof Error ? error.message : 'Unknown error'),
+        severity: 'error'
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const renderPredictionTable = (bayName: string) => {
+  if (!verificationResult) {
+    return (
+      <TableRow>
+        <TableCell colSpan={3} align="center">
+          {language === 'hu' ? 'Nincs adat' : 'No data'}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  const bayResult = verificationResult.bays.find(bay => bay.bay === bayName);
+  
+  if (!bayResult || !bayResult.found || bayResult.found.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={3} align="center">
+          {language === 'hu' ? 'Nincs adat' : 'No data'}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return bayResult.found.map((medication, index) => (
+    <TableRow key={index}>
+      <TableCell>{formatPillName(medication.pill_name)}</TableCell>
+      <TableCell align="right">{medication.count}</TableCell>
+      <TableCell align="right">
+        <span style={{ color: '#999', fontStyle: 'italic' }}>
+          {language === 'hu' ? 'Kép' : 'Image'}
+        </span>
+      </TableCell>
+    </TableRow>
+  ));
+};
+
+const getResultText = (bayName: string) => {
+  if (!verificationResult) return t.result;
+
+  const bayResult = verificationResult.bays.find(bay => bay.bay === bayName);
+  if (!bayResult) return t.result;
+
+  const resultText = bayResult.match ? t.match : t.mismatch;
+  const color = bayResult.match ? '#04e762' : '#ef233c';
+
+  return (
+    <span style={{ color, fontWeight: 'bold' }}>
+      {t.result.replace('-', resultText)}
+    </span>
+  );
+};
+
   return (
     <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN, ROLES.NURSE, ROLES.DOCTOR]}>
       <div className="camera-container" style={{
@@ -364,7 +496,13 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
           accept=".json"
           style={{ display: 'none' }}
         />
-
+        <input
+          type="file"
+          ref={imageInputRef}
+          onChange={handleImageSelect}
+          accept="image/*"
+          style={{ display: 'none' }}
+        />
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}
@@ -484,16 +622,12 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {renderPredictionTable('dispensing_bay_1')}
                   </TableBody>
                 </Table>
               </TableContainer>
             </div>
-            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_1')}</Typography>
           </Box>
           <Box sx={{ gridColumn: '2' }}>
             <Typography variant='h6' gutterBottom>{t.noon}</Typography>
@@ -534,16 +668,12 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {renderPredictionTable('dispensing_bay_2')}
                   </TableBody>
                 </Table>
               </TableContainer>
             </div>
-            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_2')}</Typography>
           </Box>
           <Box sx={{ gridColumn: '3' }}>
             <Typography variant='h6' gutterBottom>{t.night}</Typography>
@@ -584,16 +714,12 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {renderPredictionTable('dispensing_bay_3')}
                   </TableBody>
                 </Table>
               </TableContainer>
             </div>
-            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_3')}</Typography>
           </Box>
           <Box sx={{ gridColumn: '4' }}>
             <Typography variant='h6' gutterBottom>{t.midnight}</Typography>
@@ -634,16 +760,12 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                      <TableCell align="right"></TableCell>
-                    </TableRow>
+                    {renderPredictionTable('dispensing_bay_4')}
                   </TableBody>
                 </Table>
               </TableContainer>
             </div>
-            <Typography gutterBottom style={{ marginTop: '10px' }}>{t.result}</Typography>
+            <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_4')}</Typography>
           </Box>
         </div>
 
@@ -655,7 +777,12 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
           flexDirection: 'column',
           gap: '10px'
         }}>
-          <Button variant="contained">{t.verifyDispense}</Button>
+          <Button 
+            variant="contained"
+            onClick={handleVerifyDispenseClick}
+            disabled={isVerifying}>
+              {t.verifyDispense}
+            </Button>
           <Link href="/mainpage" passHref>
             <Button variant="contained">{t.mainPage}</Button>
           </Link>

@@ -799,6 +799,19 @@ class APIServer:
             """
             return await self.dispenseverification.get_recipe_reference_images(pill_name)
 
+        @self.app.post("/verify_dispense")
+        async def verify_dispense(image: UploadFile = File(...)):
+            """
+            Verify dispense by analyzing an uploaded image
+
+            Args:
+                image: The image file to analyze
+
+            Returns:
+                JSON response with verification results
+            """
+            return await self.dispenseverification.verify_dispense(image)
+
         @self.app.get("/get_all_users")
         async def get_all_users():
             """

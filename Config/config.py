@@ -68,4 +68,7 @@ class AppConfig:
     ENVIRONMENT_WEIGHTS = "Data/Environment_Weights"
     GEOMETRY_COORDS = "Data/Geometry_Coords"
     DATASET = "Data/Dataset"
-    SEGMENTATION_WEIGHTS = "Data/SegmentationWeights"
+    SEGMENTATION_WEIGHTS = "/app/weights/best.pt"
+    VERIF_MASKS = "Data/Verif_Masks"
+    VERIF_PILLS = "Data/Verif_Pills"
+    VERIF_BACKGROUNDS = "Data/Verif_Backgrounds"
