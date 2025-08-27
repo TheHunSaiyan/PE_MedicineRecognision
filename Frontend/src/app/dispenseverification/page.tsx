@@ -116,6 +116,20 @@ const CameraApp: React.FC = () => {
     }
   };
 
+const recipeRefs = useRef<(HTMLDivElement | null)[]>([]);
+const predictionRefs = useRef<(HTMLDivElement | null)[]>([]);
+const [labelHeights, setLabelHeights] = useState({ recipe: 0, prediction: 0 });
+const [bayHeight, setBayHeight] = useState(0);
+const bayRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+useEffect(() => {
+  if (bayRefs.current.length > 0) {
+    const max = Math.max(...bayRefs.current.map(el => el?.offsetHeight || 0));
+    setBayHeight(max);
+  }
+}, [medicationsData, language, verificationResult]);
+
+
   const t = translations[language as keyof typeof translations];
 
   const handleLanguageChange = (event: any) => {
@@ -531,65 +545,85 @@ const getResultText = (bayName: string) => {
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <h1 style={{ fontSize: '40px', margin: 0 }}>{t.title}</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Button 
-              variant="contained" 
-              onClick={checkEnvironment} 
-              disabled={isCheckingEnvironment}>
-              {isCheckingEnvironment ? 
-                (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
-                t.checkEnvironment}
-            </Button>
-            <FormControlLabel
-              control={<Checkbox checked={false} disabled />}
-              sx={{
-                '& .MuiSvgIcon-root': {
-                  color: false ? '#04e762' : '#ef233c',
-                  fontSize: 28,
-                },
-              }}
-              label={
-                <span style={{
-                  color: false ? '#04e762' : '#ef233c',
-                  fontWeight: 'bold'
-                }}>
-                  {t.status}
-                </span>
-              }
-            />
+                  <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '30px',
+            gap: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Button 
+                  variant="contained" 
+                  onClick={checkEnvironment} 
+                  disabled={isCheckingEnvironment}>
+                  {isCheckingEnvironment ? 
+                    (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
+                    t.checkEnvironment}
+                </Button>
+                <FormControlLabel
+                  control={<Checkbox checked={false} disabled />}
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: false ? '#04e762' : '#ef233c',
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: false ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      {t.status}
+                    </span>
+                  }
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Button variant="contained" onClick={handleSelectRecipeClick}>
+                  {t.selectRecipe}
+                </Button>
+                <FormControlLabel
+                  control={<Checkbox checked={recipeSelected} disabled />}
+                  sx={{
+                    '& .MuiSvgIcon-root': {
+                      color: recipeSelected ? '#04e762' : '#ef233c',
+                      fontSize: 28,
+                    },
+                  }}
+                  label={
+                    <span style={{
+                      color: recipeSelected ? '#04e762' : '#ef233c',
+                      fontWeight: 'bold'
+                    }}>
+                      {t.recipe}
+                    </span>
+                  }
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Button 
+                className="verify"
+                variant="contained"
+                onClick={handleVerifyDispenseClick}
+                disabled={isVerifying}>
+                {t.verifyDispense}
+              </Button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Button variant="contained" onClick={handleSelectRecipeClick}>
-              {t.selectRecipe}
-            </Button>
-            <FormControlLabel
-              control={<Checkbox checked={recipeSelected} disabled />}
-              sx={{
-                '& .MuiSvgIcon-root': {
-                  color: recipeSelected ? '#04e762' : '#ef233c',
-                  fontSize: 28,
-                },
-              }}
-              label={
-                <span style={{
-                  color: recipeSelected ? '#04e762' : '#ef233c',
-                  fontWeight: 'bold'
-                }}>
-                  {t.recipe}
-                </span>
-              }
-            />
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-          <Box sx={{ gridColumn: '1' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', alignItems: 'start' }}>
+          <Box ref={el => (bayRefs.current[0] = el)} sx={{ gridColumn: '1', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Typography variant='h6' gutterBottom>{t.morning}</Typography>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <Typography>{t.recipeLabel}</Typography>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+            
+           
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -609,10 +643,12 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <Typography>{t.predictionLabel}</Typography>
-              </div>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+          
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -626,16 +662,18 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </div>
+            
             <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_1')}</Typography>
           </Box>
-          <Box sx={{ gridColumn: '2' }}>
+
+          <Box ref={el => (bayRefs.current[1] = el)} sx={{ gridColumn: '2', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Typography variant='h6' gutterBottom>{t.noon}</Typography>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <Typography>{t.recipeLabel}</Typography>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+        
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -655,10 +693,14 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <Typography>{t.predictionLabel}</Typography>
-              </div>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+            
+           
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -672,16 +714,20 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </div>
+        
+            
             <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_2')}</Typography>
           </Box>
-          <Box sx={{ gridColumn: '3' }}>
+
+          <Box ref={el => (bayRefs.current[2] = el)} sx={{ gridColumn: '3', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Typography variant='h6' gutterBottom>{t.night}</Typography>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <Typography>{t.recipeLabel}</Typography>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+            
+            
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -701,10 +747,13 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <Typography>{t.predictionLabel}</Typography>
-              </div>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+                  
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+            
+       
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -718,16 +767,19 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </div>
+         
+            
             <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_3')}</Typography>
           </Box>
-          <Box sx={{ gridColumn: '4' }}>
+          <Box ref={el => (bayRefs.current[3] = el)} sx={{ gridColumn: '4', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Typography variant='h6' gutterBottom>{t.midnight}</Typography>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <Typography>{t.recipeLabel}</Typography>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+            
+            
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -747,10 +799,14 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <Typography>{t.predictionLabel}</Typography>
-              </div>
-              <TableContainer component={Paper} style={{ minHeight: '200px' }}>
+    
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <Typography>{t.predictionLabel}</Typography>
+            </div>
+            
+            
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -764,7 +820,8 @@ const getResultText = (bayName: string) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </div>
+          
+            
             <Typography gutterBottom style={{ marginTop: '10px' }}>{getResultText('dispensing_bay_4')}</Typography>
           </Box>
         </div>
@@ -777,12 +834,6 @@ const getResultText = (bayName: string) => {
           flexDirection: 'column',
           gap: '10px'
         }}>
-          <Button 
-            variant="contained"
-            onClick={handleVerifyDispenseClick}
-            disabled={isVerifying}>
-              {t.verifyDispense}
-            </Button>
           <Link href="/mainpage" passHref>
             <Button variant="contained">{t.mainPage}</Button>
           </Link>

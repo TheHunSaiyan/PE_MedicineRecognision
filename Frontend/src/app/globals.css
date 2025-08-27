@@ -44,3 +44,12 @@ h1, h2, h3, h4, h5, h6, span, p, div {
   color: #8338ec !important;
   border-color: #8338ec !important;
 }
+
+.verify {
+  background-color: #2F9C95 !important;
+  color: white !important;
+}
+
+.verify:hover {
+  background-color: #247c76 !important;
+}
