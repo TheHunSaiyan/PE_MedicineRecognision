@@ -67,7 +67,7 @@ class DispenseVerification:
                 detail=f"Initialization error: {str(e)}"
             )
 
-    async def check_environment(self, holder_id: str):
+    async def check_environment(self, image: UploadFile = File(...)):
         """
         Analyze the dispensing environment for proper verification conditions.
 
@@ -83,7 +83,7 @@ class DispenseVerification:
                 detail="Verification system not initialized"
             )
 
-        result = await self.verification_manager.analyze_environment(holder_id)
+        result = await self.verification_manager.analyze_environment(image)
         if not result["status"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -248,7 +248,7 @@ class DispenseVerification:
     async def verify_dispense(self, image: UploadFile = File(...)):
         """
         Verify that the dispensed medication matches the selected recipe.
-        Runs YOLO detection, extracts pill crops, assigns pills to bays,
+        Runs YOLO segmentation, extracts pill crops, assigns pills to bays,
         and compares against the saved recipe.
 
         Args:
@@ -267,12 +267,16 @@ class DispenseVerification:
             img_bytes = await image.read()
             np_arr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            img_h, img_w = frame.shape[:2]
 
             results = self.yolo_model(frame, verbose=False)
 
-            detected_medications = {"dispensing_bay_1": [],
-                                    "dispensing_bay_2": [], "dispensing_bay_3": [], "dispensing_bay_4": []}
-            img_h, img_w = frame.shape[:2]
+            detected_medications = {
+                "dispensing_bay_1": [],
+                "dispensing_bay_2": [],
+                "dispensing_bay_3": [],
+                "dispensing_bay_4": []
+            }
 
             bay_boundaries = [
                 (0, img_w * 0.35),
@@ -280,40 +284,21 @@ class DispenseVerification:
                 (img_w * 0.50, img_w * 0.65),
                 (img_w * 0.65, img_w)
             ]
-
             bay_names = ["dispensing_bay_1", "dispensing_bay_2",
                          "dispensing_bay_3", "dispensing_bay_4"]
 
             for r in results:
-                yolo_h, yolo_w = r.orig_shape
-                scale_x = img_w / yolo_w
-                scale_y = img_h / yolo_h
+                if r.masks is None or r.masks.xy is None:
+                    continue
 
-                for box, cls_id in zip(r.boxes.xyxy, r.boxes.cls):
-                    x1, y1, x2, y2 = map(int, box.tolist())
-                    x1 = int(x1 * scale_x)
-                    x2 = int(x2 * scale_x)
-                    y1 = int(y1 * scale_y)
-                    y2 = int(y2 * scale_y)
+                for mask_xy, cls_id in zip(r.masks.xy, r.boxes.cls):
+                    polygon = mask_xy.astype(np.int32)
 
-                    center_x = int((x1 + x2) / 2)
-                    bay = None
-                    for idx, (x_start, x_end) in enumerate(bay_boundaries):
-                        if x_start <= center_x < x_end:
-                            bay = bay_names[idx]
-                            break
+                    mask = np.zeros((img_h, img_w), dtype=np.uint8)
+                    cv2.fillPoly(mask, [polygon], 255)
 
-                    if bay is None:
-                        bay = bay_names[-1]
+                    x, y, w, h = cv2.boundingRect(polygon)
 
-                    pill_name = self.yolo_model.names[int(cls_id)]
-
-                    polygon = [
-                        (x1 / img_w, y1 / img_h),
-                        (x2 / img_w, y1 / img_h),
-                        (x2 / img_w, y2 / img_h),
-                        (x1 / img_w, y2 / img_h),
-                    ]
                     txt_content = f"{int(cls_id)} " + \
                         " ".join([f"{x} {y}" for (x, y) in polygon]) + "\n"
 
@@ -325,56 +310,49 @@ class DispenseVerification:
                         cv2.imwrite(tmp_img.name, frame)
                         img_path = tmp_img.name
 
-                    mask = CreateMask.process_data(img_path, txt_path)
-                    os.makedirs(AppConfig.VERIF_MASKS, exist_ok=True)
                     CreateMask.save_masks(
                         mask, img_path, AppConfig.VERIF_MASKS)
+                    if w == 0 or h == 0:
+                        continue
+                    x, y = max(0, x), max(0, y)
+                    w, h = min(w, img_w - x), min(h, img_h - y)
 
-                    cutout = cv2.bitwise_and(frame, frame, mask=mask)
-                    pill_crop = cutout[y1:y2, x1:x2]
+                    center_x = x + w // 2
+                    bay = next((bay_names[i] for i, (start, end) in enumerate(bay_boundaries)
+                                if start <= center_x < end), bay_names[-1])
+
+                    pill_name = self.yolo_model.names[int(cls_id)]
+
+                    pill_rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+                    mask_resized = mask
+                    pill_rgba[:, :, 3] = mask_resized
+                    pill_crop = pill_rgba[y:y+h, x:x+w]
+
+                    if pill_crop.size == 0:
+                        continue
 
                     output_dir = Path(AppConfig.VERIF_PILLS)
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    filename = f"{pill_name}_{bay}_{x1}_{y1}.jpg"
+                    filename = f"{pill_name}_{bay}_{x}_{y}.png"
                     save_path = output_dir / filename
                     cv2.imwrite(str(save_path), pill_crop)
 
-                    cutout_rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
-                    cutout_rgba[:, :, 3] = mask
-
-                    pill_crop = cutout_rgba[y1:y2, x1:x2]
-
                     bg_root = Path(AppConfig.BACKGROUND_IMAGES)
-                    background, chosen_bg_path = self.get_random_background(
-                        bg_root, (x2 - x1, y2 - y1))
+                    background, _ = self.get_random_background(
+                        bg_root, (img_w, img_h))
+                    bg_rgba = cv2.cvtColor(background, cv2.COLOR_BGR2BGRA)
 
-                    background_rgba = cv2.cvtColor(
-                        background, cv2.COLOR_BGR2BGRA)
-
-                    background, chosen_bg_path = self.get_random_background(
-                        Path(AppConfig.BACKGROUND_IMAGES), (img_w, img_h)
-                    )
-
-                    mask_rgb = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-
-                    pill_only = cv2.bitwise_and(frame, mask_rgb)
-
-                    mask_inv = cv2.bitwise_not(mask)
+                    mask_inv = cv2.bitwise_not(mask_resized)
                     mask_inv_rgb = cv2.cvtColor(mask_inv, cv2.COLOR_GRAY2BGR)
 
+                    pill_only = cv2.bitwise_and(frame, frame, mask=mask)
                     bg_only = cv2.bitwise_and(background, mask_inv_rgb)
 
                     overlay = cv2.add(pill_only, bg_only)
 
                     output_dir = Path(AppConfig.VERIF_BACKGROUNDS)
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    filename = f"{pill_name}_{bay}_{x1}_{y1}_bg.jpg"
-                    save_path = output_dir / filename
-                    cv2.imwrite(str(save_path), overlay)
-
-                    output_dir = Path(AppConfig.VERIF_BACKGROUNDS)
-                    output_dir.mkdir(parents=True, exist_ok=True)
-                    filename = f"{pill_name}_{bay}_{x1}_{y1}_bg.jpg"
+                    filename = f"{pill_name}_{bay}_{x}_{y}_bg.jpg"
                     save_path = output_dir / filename
                     cv2.imwrite(str(save_path), overlay)
 
@@ -401,16 +379,12 @@ class DispenseVerification:
                     "match": match
                 })
 
-            correct = True
-            for bay in bays_result:
-                if not bay["match"]:
-                    correct = False
-                    break
+            verification_passed = all(bay["match"] for bay in bays_result)
 
             return {
                 "status": True,
                 "bays": bays_result,
-                "verification_passed": correct
+                "verification_passed": verification_passed
             }
 
         except Exception as e:

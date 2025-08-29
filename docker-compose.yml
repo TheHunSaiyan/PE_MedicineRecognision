@@ -33,6 +33,7 @@ services:
       - ./Models:/app/Models
       - ./Database:/app/Database
       - ./Data/SegmentationWeights/best.pt:/app/weights/best.pt
+      - ./Data/Verif_Images:/app/Verif_Images
     devices:
       - "/dev/video2:/dev/video2"
     privileged: true

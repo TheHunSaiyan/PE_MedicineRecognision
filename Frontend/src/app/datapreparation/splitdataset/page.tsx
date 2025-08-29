@@ -166,10 +166,8 @@ const [availability, setAvailability] = useState<DataAvailability>({
     if (!response.ok) {
       throw new Error('Failed to start dataset split');
     }
-    if(progressInfo.progress!=0){
-      setProgress(100);
-    }
-    
+    setProgress(100);
+
   } catch (err) {
     setSplitError(err instanceof Error ? err.message : 'An unknown error occurred');
   } finally {
@@ -372,7 +370,7 @@ return (
                 color="primary" 
                 onClick={startSplit}
                 style={{ marginTop: '20px' }}
-                disabled={isProcessing}
+                disabled={isProcessing || loading}
               >
                 {isProcessing ? 'Processing...' : 'Start'}
               </Button>

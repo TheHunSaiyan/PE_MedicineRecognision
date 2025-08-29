@@ -64,7 +64,7 @@ class AppConfig:
     RECIPES = "Data/Recipes"
     THUMBNAILS = "Data/Thumbnail"
     ENVIRONMENT_IMAGES = "Data/Environment_Images"
-    VERIF_IMAGES = "Data/Verif_Images"
+    VERIF_IMAGES = "/app/Verif_Images"
     ENVIRONMENT_WEIGHTS = "Data/Environment_Weights"
     GEOMETRY_COORDS = "Data/Geometry_Coords"
     DATASET = "Data/Dataset"

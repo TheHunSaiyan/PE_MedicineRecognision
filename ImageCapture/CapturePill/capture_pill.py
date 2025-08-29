@@ -86,8 +86,7 @@ class CapturePill:
                     detail="No frame available"
                 )
 
-            filename = f"{pill_name}_{next_image_number:03d} \
-            _{lamp_position[0]}_{pill_side[0]}.jpg"
+            filename = f"{pill_name}_{next_image_number:03d}_{lamp_position[0]}_{pill_side[0]}.jpg"
             filepath = pill_dir / filename
 
             cv2.imwrite(str(filepath), frame, [
@@ -97,7 +96,8 @@ class CapturePill:
                 "status": "success",
                 "filename": str(filename),
                 "image_number": next_image_number,
-                "full_path": str(filepath)
+                "full_path": str(filepath),
+                "url": f"/captured-images/{pill_name}/{filename}"
             }
 
         except HTTPException:

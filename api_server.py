@@ -107,7 +107,13 @@ class APIServer:
         )
 
         self.app.mount(
-            "/verif_images", StaticFiles(directory=AppConfig.VERIF_IMAGES), name="verif_images")
+            "/CalibrationImages",
+            StaticFiles(directory="/app/CalibrationImages"),
+            name="CalibrationImages"
+        )
+
+        self.app.mount(
+            "/verif_images", StaticFiles(directory=Path("/app/Verif_Images")), name="verif_images")
 
     def setup_routes(self):
         """
@@ -738,7 +744,7 @@ class APIServer:
             return await self.dispenseverification.initialization()
 
         @self.app.post("/check_environment")
-        async def verify_check_environment(data: Dict[str, Any]):
+        async def verify_check_environment(image: UploadFile = File(...)):
             """
             Check the environment for dispense verification.
 
@@ -748,7 +754,7 @@ class APIServer:
             Returns:
                 Dict[str, Any]: A dictionary containing the result of the environment check.
             """
-            return await self.dispenseverification.check_environment(data.get("holder_id", ""))
+            return await self.dispenseverification.check_environment(image)
 
         @self.app.post("/selected_recipe")
         async def selected_recipe(data: Dict[str, Any]):

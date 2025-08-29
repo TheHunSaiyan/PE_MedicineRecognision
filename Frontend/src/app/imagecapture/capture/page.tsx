@@ -160,7 +160,7 @@ const formatMedicationName = (name: string): string => {
     const data = await response.json();
 
     if (data.status === 'success' && data.filename) {
-      setImageUrl(`${apiUrl}/captured-images/${data.filename}`);
+      setImageUrl(`${apiUrl}${data.url}`);
       setCaptureTime(new Date().toLocaleTimeString());
       setFilePath(data.filename)
     } else {

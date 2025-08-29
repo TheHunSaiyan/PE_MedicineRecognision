@@ -43,7 +43,7 @@ const CameraApp: React.FC = () => {
   const [language, setLanguage] = useState('hu');
   const [isInitializing, setIsInitializing] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
-  const [environmentStatus, setEnvironmentStatus] = useState<boolean | null>(null);
+  const [environmentStatus, setEnvironmentStatus] = useState<boolean>(false);
   const [environmentMessage, setEnvironmentMessage] = useState<string>('');
   const [isCheckingEnvironment, setIsCheckingEnvironment] = useState(false);
   const [recipeSelected, setRecipeSelected] = useState(false);
@@ -83,7 +83,16 @@ const CameraApp: React.FC = () => {
       imageUploadSuccess: "Image uploaded successfully!",
       imageUploadError: "Error uploading image: ",
       match: "Match",
-      mismatch: "Mismatch"
+      mismatch: "Mismatch",
+      environmentReady: "Environment ready for verification",
+      environmentNotReady: "Environment not ready",
+      trayNotDetected: "Tray not detected",
+      qrNotDetected: "QR code not detected",
+      qrWrongSide: "QR code on wrong side",
+      qrMismatch: "QR code mismatch",
+      trayNotEmpty: "Tray is not empty",
+      analysisError: "Analysis error",
+      environmentCheckFailed: "Environment check failed"
     },
     hu: {
       title: "Gyógyszeradagolás ellenőrzése",
@@ -112,7 +121,16 @@ const CameraApp: React.FC = () => {
       imageUploadSuccess: "Kép sikeresen feltöltve!",
       imageUploadError: "Hiba a kép feltöltésekor: ",
       match: "Egyezik",
-      mismatch: "Nem egyezik"
+      mismatch: "Nem egyezik",
+      environmentReady: "Környezet készen áll az ellenőrzésre",
+      environmentNotReady: "A környezet nincs készen",
+      trayNotDetected: "Tálca nem érzékelhető",
+      qrNotDetected: "QR kód nem érzékelhető",
+      qrWrongSide: "QR kód rossz oldalon van",
+      qrMismatch: "QR kód nem egyezik",
+      trayNotEmpty: "A tálca nem üres",
+      analysisError: "Elemzési hiba",
+      environmentCheckFailed: "Környezet ellenőrzése sikertelen"
     }
   };
 
@@ -121,6 +139,7 @@ const predictionRefs = useRef<(HTMLDivElement | null)[]>([]);
 const [labelHeights, setLabelHeights] = useState({ recipe: 0, prediction: 0 });
 const [bayHeight, setBayHeight] = useState(0);
 const bayRefs = useRef<(HTMLDivElement | null)[]>([]);
+const environmentImageInputRef = useRef<HTMLInputElement>(null);
 
 useEffect(() => {
   if (bayRefs.current.length > 0) {
@@ -163,6 +182,30 @@ useEffect(() => {
 
     initializeApp();
   }, []);
+
+  const getEnvironmentErrorMessage = (message: string): string => {
+  try {
+    const errorData = JSON.parse(message);
+    if (errorData.detail) {
+      message = errorData.detail;
+    }
+  } catch (e) {
+  }
+
+  const errorMapping: Record<string, string> = {
+    'Tray not detected': language === 'hu' ? t.trayNotDetected : 'Tray not detected',
+    'QR code not detected': language === 'hu' ? t.qrNotDetected : 'QR code not detected',
+    'QR code on wrong side': language === 'hu' ? t.qrWrongSide : 'QR code on wrong side',
+    'Tray is not empty': language === 'hu' ? t.trayNotEmpty : 'Tray is not empty',
+    'Environment ready for verification': language === 'hu' ? t.environmentReady : 'Environment ready for verification',
+    'QR code mismatch': language === 'hu' ? t.qrMismatch : 'QR code mismatch',
+    'Analysis error': language === 'hu' ? t.analysisError : 'Analysis error',
+    'Environment check failed': language === 'hu' ? t.environmentCheckFailed : 'Environment check failed'
+  };
+
+  return errorMapping[message] || message;
+};
+
 
   const checkEnvironment = async () => {
     try {
@@ -364,8 +407,8 @@ const renderMedicationTable = (medications: Medication[], bayName: string) => {
               src={`http://localhost:2076${firstImage}`}
               alt={medication.pill_name}
               style={{ 
-                width: '50px', 
-                height: '50px', 
+                width: '108px', 
+                height: '60px', 
                 objectFit: 'cover',
                 borderRadius: '4px'
               }}
@@ -494,6 +537,73 @@ const getResultText = (bayName: string) => {
   );
 };
 
+const handleEnvironmentImageSelect = () => {
+    if (environmentImageInputRef.current) {
+      environmentImageInputRef.current.click();
+    }
+  };
+
+const handleEnvironmentImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setSnackbar({
+        open: true,
+        message: t.imageUploadError + (language === 'hu' ? 'Csak képfájlok engedélyezettek' : 'Only image files are allowed'),
+        severity: 'error'
+      });
+      return;
+    }
+
+    try {
+      setIsCheckingEnvironment(true);
+      setEnvironmentMessage('');
+      
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('holder_id', "123456789");
+
+      const response = await fetch('http://localhost:2076/check_environment', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = getEnvironmentErrorMessage(data.detail || data.message || 'Environment check failed');
+        throw new Error(errorMessage);
+      }
+
+      setEnvironmentStatus(data.status);
+      setEnvironmentMessage(data.message);
+
+      const localizedMessage = getEnvironmentErrorMessage(data.message || data.detail || 'Environment check failed');
+      setSnackbar({
+        open: true,
+        message: data.status 
+          ? localizedMessage 
+          : `${language === 'hu' ? t.environmentNotReady : t.environmentNotReady}: ${localizedMessage}`,
+        severity: data.status ? 'success' : 'error'
+      });
+
+    } catch (error) {
+      console.error('Environment check error:', error);
+      setEnvironmentStatus(false);
+      const errorMessage = error instanceof Error ? error.message : 'Environment check failed';
+      setEnvironmentMessage(errorMessage);
+      
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
+      });
+    } finally {
+      setIsCheckingEnvironment(false);
+    }
+  };
+
   return (
     <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.TECHNICIAN, ROLES.NURSE, ROLES.DOCTOR]}>
       <div className="camera-container" style={{
@@ -514,6 +624,13 @@ const getResultText = (bayName: string) => {
           type="file"
           ref={imageInputRef}
           onChange={handleImageSelect}
+          accept="image/*"
+          style={{ display: 'none' }}
+        />
+        <input
+          type="file"
+          ref={environmentImageInputRef}
+          onChange={handleEnvironmentImageUpload}
           accept="image/*"
           style={{ display: 'none' }}
         />
@@ -555,24 +672,24 @@ const getResultText = (bayName: string) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Button 
-                  variant="contained" 
-                  onClick={checkEnvironment} 
-                  disabled={isCheckingEnvironment}>
-                  {isCheckingEnvironment ? 
-                    (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
-                    t.checkEnvironment}
-                </Button>
+                variant="contained" 
+                onClick={handleEnvironmentImageSelect} 
+                disabled={isCheckingEnvironment}>
+                {isCheckingEnvironment ? 
+                  (language === 'hu' ? 'Ellenőrzés...' : 'Checking...') : 
+                  t.checkEnvironment}
+              </Button>
                 <FormControlLabel
-                  control={<Checkbox checked={false} disabled />}
+                  control={<Checkbox checked={environmentStatus} disabled />}
                   sx={{
                     '& .MuiSvgIcon-root': {
-                      color: false ? '#04e762' : '#ef233c',
+                      color: environmentStatus ? '#04e762' : '#ef233c',
                       fontSize: 28,
                     },
                   }}
                   label={
                     <span style={{
-                      color: false ? '#04e762' : '#ef233c',
+                      color: environmentStatus ? '#04e762' : '#ef233c',
                       fontWeight: 'bold'
                     }}>
                       {t.status}
@@ -609,7 +726,7 @@ const getResultText = (bayName: string) => {
                 className="verify"
                 variant="contained"
                 onClick={handleVerifyDispenseClick}
-                disabled={isVerifying}>
+                disabled={isVerifying || !environmentStatus || !recipeSelected}>
                 {t.verifyDispense}
               </Button>
             </div>

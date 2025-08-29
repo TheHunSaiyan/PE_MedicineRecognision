@@ -143,12 +143,14 @@ const formatTimestamp = (date: Date): string => {
     const data = await response.json();
 
     if (data.status === 'success' && data.filepath) {
-      const imageUrl = `${apiUrl}/${data.filepath.replace('\\', '/')}`;
-      
+      const parts = data.filepath.split(/[\\/]/); 
+      const folder = parts.at(-2); 
+      const filename = parts.at(-1);
+
+      const imageUrl = `${apiUrl}/CalibrationImages/${folder}/${filename}`;
       setImageUrl(imageUrl);
       setCaptureTime(new Date().toLocaleTimeString());
 
-      const filename = data.filepath.split(/[\\/]/).pop() || `capture_${Date.now()}.jpg`;
       setLastCapturedImage(filename);
       
       setCaptureCount(prev => prev + 1);
